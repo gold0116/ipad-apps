@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>공룡 달리기</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #info { text-align: center; font-size: 20px; margin: 4px 0 8px; }
+  canvas { display: block; margin: 0 auto; background: #f7f7f7; border-radius: 8px; border: 1px solid #ddd; }
+  .pad { text-align: center; margin-top: 14px; }
+  .pad .btn { width: 44%; font-size: 24px; padding: 22px 0; margin: 4px 2%; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 공룡 달리기</div>
+<div class="wrap">
+  <div id="info">점수 <b id="sc">0</b> · 최고 <b id="best">0</b></div>
+  <canvas id="cv" width="600" height="200"></canvas>
+  <div class="pad">
+    <button class="btn" id="jump">점프 ▲</button><button class="btn gray" id="duck">숙이기 ▼</button>
+  </div>
+  <p style="text-align:center;color:#888">화면을 탭하거나 점프 버튼으로 뛰고, 숙이기 버튼을 누르고 있으면 새 밑으로 지나가요</p>
+</div>
+<script>
+(function () {
+  var W = 600, H = 200, GY = 170, COL = '#535353';
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var state = 'ready', last = 0, overAt = 0;
+  var dy, vy, duck, obs, speed, score, best = 0, clouds, runT, gapNeed, bumps;
+  try { best = parseInt(localStorage.getItem('bestDino') || '0', 10) || 0; } catch (e) {}
+  function $(i) { return document.getElementById(i); }
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+
+  function layout() {
+    var w = Math.min(window.innerWidth - 24, 900);
+    if (w < 280) w = 280;
+    cv.style.width = w + 'px'; cv.style.height = Math.round(w / 3) + 'px';
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+  layout();
+
+  function reset() {
+    dy = 0; vy = 0; duck = false; obs = []; speed = 0.32; score = 0; runT = 0;
+    gapNeed = 400; bumps = []; clouds = [];
+    for (var i = 0; i < 4; i++) clouds.push({ x: rnd(0, W), y: rnd(20, 80), w: rnd(40, 70) });
+    for (var j = 0; j < 12; j++) bumps.push({ x: rnd(0, W), y: GY + rnd(6, 20), w: rnd(2, 8) });
+  }
+  function begin() { reset(); state = 'run'; last = 0; }
+  function jump() {
+    if (state === 'ready') { begin(); }
+    else if (state === 'over') { if (Date.now() - overAt > 500) begin(); return; }
+    if (state === 'run' && dy === 0 && !duck) vy = 0.62;
+  }
+  function setDuck(v) {
+    if (state === 'ready' || state === 'over') { if (v) jump(); return; }
+    duck = v;
+  }
+
+  function spawn() {
+    var type = (score > 150 && Math.random() < 0.3) ? 'bird' : 'cactus';
+    if (type === 'cactus') {
+      var n = Math.floor(rnd(1, 4)), h = Math.floor(rnd(34, 52));
+      obs.push({ t: 'c', x: W + 10, n: n, h: h, w: n * 16 + (n - 1) * 4, top: GY - h });
+    } else {
+      var high = Math.random() < 0.5;
+      obs.push({ t: 'b', x: W + 10, w: 40, h: 24, top: high ? 106 : 140 });
+    }
+    gapNeed = speed * 590 * 1.15 + rnd(40, 300);
+  }
+
+  function hit(o) {
+    var dl, dr, dt, db = GY - dy - 2;
+    if (duck && dy === 0) { dl = 44; dr = 96; dt = GY - 28 + 4; }
+    else { dl = 46; dr = 80; dt = GY - dy - 50 + 4; }
+    var ol = o.x + 3, or = o.x + o.w - 3, ot = o.top + 3, ob = o.top + o.h - 3;
+    return dl < or && dr > ol && dt < ob && db > ot;
+  }
+
+  function update(dt) {
+    runT += dt;
+    speed = Math.min(0.75, speed + 0.000012 * dt);
+    score += speed * dt * 0.03;
+    // 점프 물리 (위쪽이 +)
+    if (dy > 0 || vy > 0) {
+      dy += vy * dt;
+      vy -= 0.0021 * dt;
+      if (duck) vy -= 0.004 * dt; // 숙이면 빨리 내려옴
+      if (dy <= 0) { dy = 0; vy = 0; }
+    }
+    var i;
+    for (i = 0; i < obs.length; i++) obs[i].x -= speed * dt * (obs[i].t === 'b' ? 1.15 : 1);
+    while (obs.length && obs[0].x + obs[0].w < -10) obs.shift();
+    var lastO = obs[obs.length - 1];
+    if (!lastO || (W - (lastO.x + lastO.w)) >= gapNeed) spawn();
+    for (i = 0; i < clouds.length; i++) { clouds[i].x -= speed * dt * 0.2; if (clouds[i].x < -80) { clouds[i].x = W + rnd(0, 100); clouds[i].y = rnd(20, 80); } }
+    for (i = 0; i < bumps.length; i++) { bumps[i].x -= speed * dt; if (bumps[i].x < -10) { bumps[i].x = W + rnd(0, 60); } }
+    for (i = 0; i < obs.length; i++) if (hit(obs[i])) { die(); break; }
+  }
+
+  function die() {
+    state = 'over'; overAt = Date.now();
+    var s = Math.floor(score);
+    if (s > best) { best = s; try { localStorage.setItem('bestDino', best); } catch (e) {} }
+  }
+
+  function r(x, y, w, h) { ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+
+  function drawDino() {
+    var x = 40, bottom = GY - dy;
+    ctx.fillStyle = COL;
+    if (duck && dy === 0) {
+      var t = bottom - 28;
+      r(x + 4, t + 6, 44, 16);        // 몸통
+      r(x, t + 8, 8, 8);              // 꼬리
+      r(x + 40, t, 16, 16);           // 머리
+      r(x + 50, t + 10, 6, 4);        // 턱
+      var a = Math.floor(runT / 90) % 2;
+      r(x + 12, t + 22, 8, a ? 6 : 2); r(x + 30, t + 22, 8, a ? 2 : 6);
+      ctx.fillStyle = state === 'over' ? '#e5484d' : '#f7f7f7'; r(x + 46, t + 3, 4, 4);
+    } else {
+      var t2 = bottom - 50;
+      r(x + 6, t2 + 18, 28, 22);      // 몸통
+      r(x, t2 + 22, 8, 8); r(x + 2, t2 + 30, 6, 4);   // 꼬리
+      r(x + 24, t2, 20, 18);          // 머리
+      r(x + 36, t2 + 12, 8, 8);       // 턱
+      r(x + 30, t2 + 28, 8, 4);       // 팔
+      var f = (dy > 0) ? 0 : Math.floor(runT / 90) % 2;
+      r(x + 10, t2 + 40, 8, f ? 10 : 6); r(x + 22, t2 + 40, 8, f ? 6 : 10);
+      ctx.fillStyle = state === 'over' ? '#e5484d' : '#f7f7f7'; r(x + 36, t2 + 4, 4, 4);
+    }
+  }
+
+  function drawObs(o) {
+    ctx.fillStyle = COL;
+    if (o.t === 'c') {
+      for (var k = 0; k < o.n; k++) {
+        var cx = o.x + k * 20, tp = o.top;
+        r(cx + 5, tp, 6, o.h);
+        r(cx, tp + 8, 4, 14); r(cx, tp + 18, 6, 4);
+        r(cx + 12, tp + 14, 4, 12); r(cx + 10, tp + 22, 6, 4);
+      }
+    } else {
+      var up = Math.floor(runT / 120) % 2;
+      r(o.x + 6, o.top + 8, 28, 10);
+      r(o.x + 30, o.top + 6, 10, 8);
+      r(o.x, o.top + 10, 8, 4);
+      if (up) r(o.x + 12, o.top, 14, 8); else r(o.x + 12, o.top + 18, 14, 6);
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#f7f7f7'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#dcdcdc';
+    for (var i = 0; i < clouds.length; i++) { r(clouds[i].x, clouds[i].y, clouds[i].w, 10); r(clouds[i].x + 10, clouds[i].y - 6, clouds[i].w - 20, 8); }
+    ctx.fillStyle = COL; ctx.fillRect(0, GY, W, 2);
+    ctx.fillStyle = '#9a9a9a';
+    for (var j = 0; j < bumps.length; j++) r(bumps[j].x, bumps[j].y, bumps[j].w, 2);
+    for (var k = 0; k < obs.length; k++) drawObs(obs[k]);
+    drawDino();
+    ctx.fillStyle = COL; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('HI ' + best + '   ' + Math.floor(score), W - 12, 28);
+    ctx.textAlign = 'center'; ctx.font = 'bold 26px sans-serif';
+    if (state === 'ready') ctx.fillText('탭하면 시작!', W / 2, 90);
+    if (state === 'over') { ctx.fillText('게임 오버', W / 2, 80); ctx.font = '18px sans-serif'; ctx.fillText('탭해서 다시 시작', W / 2, 110); }
+    $('sc').textContent = Math.floor(score); $('best').textContent = best;
+  }
+
+  function loop(ts) {
+    if (state === 'run') {
+      if (!last) last = ts;
+      var dt = Math.min(40, ts - last); last = ts;
+      update(dt);
+    }
+    draw();
+    window.requestAnimationFrame(loop);
+  }
+
+  // 입력
+  function tp(el, down, up) {
+    el.addEventListener('touchstart', function (e) { e.preventDefault(); e.stopPropagation(); down(); }, false);
+    el.addEventListener('touchend', function (e) { e.preventDefault(); e.stopPropagation(); if (up) up(); }, false);
+    el.addEventListener('touchcancel', function () { if (up) up(); }, false);
+    el.addEventListener('mousedown', function () { down(); }, false);
+    el.addEventListener('mouseup', function () { if (up) up(); }, false);
+  }
+  tp($('jump'), jump, null);
+  tp($('duck'), function () { setDuck(true); }, function () { setDuck(false); });
+  tp(cv, jump, null);
+  document.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === 32 || e.keyCode === 38) { e.preventDefault(); jump(); }
+    if (e.keyCode === 40) { e.preventDefault(); setDuck(true); }
+  }, false);
+  document.addEventListener('keyup', function (e) { if (e.keyCode === 40) setDuck(false); }, false);
+
+  reset();
+  window.requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
