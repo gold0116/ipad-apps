@@ -16,7 +16,8 @@
   }
   // iOS는 터치 직후에만 소리를 허용하므로 여러 이벤트에서 깨운다
   var ev = ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
-  for (var i = 0; i < ev.length; i++) document.addEventListener(ev[i], unlock, false);
+  // 세 번째 인자 true(캡처): 게임 쪽에서 stopPropagation을 해도 먼저 받는다
+  for (var i = 0; i < ev.length; i++) document.addEventListener(ev[i], unlock, true);
 
   function tone(freq, dur, type, vol, delay, slideTo) {
     if (muted || !ctx) return;
@@ -50,6 +51,7 @@
 
   window.SFX = {
     play: function (name) { if (FX[name]) FX[name](); },
+    info: function () { return { supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) { muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {} }
   };

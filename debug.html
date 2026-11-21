@@ -23,6 +23,13 @@
   <h2>기기 정보</h2>
   <table id="info"></table>
 
+  <h2>효과음 시험</h2>
+  <p style="font-size:14px;color:#666">버튼을 눌러 소리가 나는지 확인하세요. 안 나면 옆면 음소거 스위치와 음량도 확인하세요.</p>
+  <table id="sinfo"></table>
+  <div style="margin-top:8px">
+    <button class="btn" id="s1">점프</button><button class="btn" id="s2">동전</button><button class="btn" id="s3">충돌</button><button class="btn" id="s4">줄 지움</button>
+  </div>
+
   <h2>이모지 크기 시험</h2>
   <p style="font-size:14px;color:#666">🐹이 회색 칸(150px)을 꽉 채우는 방식이 어느 것인지 알려 주세요.</p>
 
@@ -59,6 +66,27 @@
     <div style="font-size:100px;line-height:110px">100px 가 🐹</div></div>
 </div>
 <script src="emoji.js"></script>
+<script src="sound.js"></script>
+<script>
+(function () {
+  function show() {
+    var i = SFX.info();
+    document.getElementById('sinfo').innerHTML =
+      '<tr><td>오디오 지원</td><td>' + (i.supported ? '예' : '아니오') + '</td></tr>' +
+      '<tr><td>오디오 시작됨</td><td>' + (i.started ? '예' : '아직 (화면을 한 번 터치하면 시작)') + '</td></tr>' +
+      '<tr><td>상태</td><td>' + i.state + '</td></tr>' +
+      '<tr><td>소리 끔 설정</td><td>' + (i.muted ? '꺼짐' : '켜짐') + '</td></tr>';
+  }
+  var map = { s1: 'jump', s2: 'coin', s3: 'hit', s4: 'line' };
+  for (var id in map) (function (id) {
+    var b = document.getElementById(id);
+    b.addEventListener('touchend', function () { setTimeout(function () { SFX.play(map[id]); show(); }, 30); }, false);
+    b.addEventListener('click', function () { SFX.play(map[id]); show(); }, false);
+  })(id);
+  show();
+  setInterval(show, 1500);
+})();
+</script>
 <script>
 (function () {
   document.getElementById('e20').innerHTML = emo('🐹', 150, 20);
