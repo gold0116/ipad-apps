@@ -135,7 +135,7 @@
 
   function place(x, y, p) {
     B[y][x] = p; hist.push({ x: x, y: y, p: p });
-    SFX.play(p === me ? 'move' : 'drop');
+    SFX.play('clack');
     var w = checkWin(x, y, p);
     if (w) {
       over = true; winLine = w;
@@ -191,7 +191,7 @@
   showRec(); newGame();
 })();
 </script>
-<script src="sound.js?v=24"></script>
+<script src="sound.js?v=25"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

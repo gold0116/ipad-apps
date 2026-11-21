@@ -27,7 +27,7 @@
   <p style="font-size:14px;color:#666">버튼을 눌러 소리가 나는지 확인하세요. 안 나면 옆면 음소거 스위치와 음량도 확인하세요.</p>
   <table id="sinfo"></table>
   <div style="margin-top:8px">
-    <button class="btn" id="s1">점프</button><button class="btn" id="s2">동전</button><button class="btn" id="s3">충돌</button><button class="btn" id="s4">줄 지움</button>
+    <button class="btn" id="s1">점프</button><button class="btn" id="s2">동전</button><button class="btn" id="s3">충돌</button><button class="btn" id="s4">줄 지움</button><button class="btn" id="s5">딱(기물 놓기)</button><button class="btn" id="s6">딱-쿵(기물 잡기)</button>
     <button class="btn gray" id="m1">배경음 시작</button><button class="btn gray" id="m2">배경음 정지</button>
   </div>
 
@@ -136,7 +136,7 @@
   </script>
 </div>
 <script src="emoji.js?v=16"></script>
-<script src="sound.js?v=24"></script>
+<script src="sound.js?v=25"></script>
 <script>
 (function () {
   function show() {
@@ -149,7 +149,7 @@
       '<tr><td>상태</td><td>' + i.state + '</td></tr>' +
       '<tr><td>소리 끔 설정</td><td>' + (i.muted ? '꺼짐' : '켜짐') + '</td></tr>';
   }
-  var map = { s1: 'jump', s2: 'coin', s3: 'hit', s4: 'line' };
+  var map = { s1: 'jump', s2: 'coin', s3: 'hit', s4: 'line', s5: 'clack', s6: 'clackcap' };
   for (var id in map) (function (id) {
     var b = document.getElementById(id);
     b.addEventListener('touchend', function () { setTimeout(function () { SFX.play(map[id]); show(); }, 30); }, false);

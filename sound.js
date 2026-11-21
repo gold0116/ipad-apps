@@ -188,6 +188,9 @@
     hit:    function () { tone(320, 0.4, 'sawtooth', 0.16, 0, 50); },
     point:  function () { tone(880, 0.07, 'square', 0.09, 0); tone(880, 0.07, 'square', 0.09, 0.12); },
     move:   function () { tone(200, 0.03, 'square', 0.05, 0); },
+    // 나무 알이 판에 놓이는 "딱" / 상대 알을 잡을 때의 "딱-쿵"
+    clack:    function () { tone(1500, 0.02, 'square', 0.07, 0, 700); tone(260, 0.07, 'sine', 0.22, 0, 110); },
+    clackcap: function () { tone(1700, 0.02, 'square', 0.09, 0, 800); tone(240, 0.13, 'sine', 0.3, 0, 70); tone(900, 0.03, 'square', 0.06, 0.06, 400); },
     rotate: function () { tone(480, 0.05, 'square', 0.07, 0, 600); },
     drop:   function () { tone(140, 0.08, 'square', 0.12, 0, 80); },
     line:   function () { tone(523, 0.08, 'square', 0.1, 0); tone(659, 0.08, 'square', 0.1, 0.08); tone(784, 0.08, 'square', 0.1, 0.16); tone(1047, 0.16, 'square', 0.1, 0.24); },
@@ -237,7 +240,7 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 24,
+    version: 25,
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -245,7 +248,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 24, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 25, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

@@ -1,8 +1,8 @@
 CACHE MANIFEST
-# v35 2026-11-21
+# v36 2026-11-21
 
 emoji.js?v=16
-sound.js?v=24
+sound.js?v=25
 tetris.html
 breakout.html
 sudoku.html

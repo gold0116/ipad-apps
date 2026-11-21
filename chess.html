@@ -305,7 +305,7 @@
     else { mv.style.color = '#555'; mv.style.fontWeight = 'normal'; }
     mv.textContent = txt;
     cur = make(cur, m); hist.push({ st: cur, mv: m }); last = m; sel = -1; targets = [];
-    startAnim({ f: m.f, t: m.t, p: p, v: v, vsq: vsq, snd: v ? 'hit' : (kind === 'promo' ? 'coin' : 'move') }, function () { if (g === gid) afterMove(); });
+    startAnim({ f: m.f, t: m.t, p: p, v: v, vsq: vsq, snd: v ? 'clackcap' : (kind === 'promo' ? 'coin' : 'clack') }, function () { if (g === gid) afterMove(); });
   }
   function aiTurn() {
     busy = true;
@@ -478,7 +478,7 @@
   showRec(); newGame();
 })();
 </script>
-<script src="sound.js?v=24"></script>
+<script src="sound.js?v=25"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>
