@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>노트북 연동</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  .box { background: #fff; border-radius: 12px; padding: 14px; margin-top: 12px; font-size: 16px; }
+  .ok { color: #1a7f3c; } .warn { color: #c33; }
+  input[type=text] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="top">노트북 연동</div>
+<div class="wrap">
+  <div class="box" id="st">처리 중...</div>
+  <div class="box" id="ret" style="display:none">
+    <div class="small" style="font-size:13px;color:#777">앱으로 돌아갈 주소</div>
+    <input type="text" id="back" placeholder="https://.../backup.html">
+    <div style="margin-top:8px"><button class="btn" id="goBack">앱으로 돌아가기</button></div>
+  </div>
+</div>
+<script>
+// 이 페이지는 "노트북 서버"에서 열려야 동작해요(같은 서버의 /api/backup 사용).
+// 앱(backup.html)이 window.name에 실어 보낸 백업을 노트북에 저장하거나, 노트북의 백업을 window.name에 실어 앱으로 돌려보낸다.
+(function () {
+  function $(i) { return document.getElementById(i); }
+  var h = location.hash.substr(1), parts = h.split('?'), mode = parts[0], back = '';
+  var m = /(?:^|&)back=([^&]*)/.exec(parts[1] || '');
+  if (m) { try { back = decodeURIComponent(m[1]); } catch (e) {} }
+  function setStatus(t, cls) { $('st').className = 'box ' + (cls || ''); $('st').textContent = t; }
+  function home(suffix) { if (!/^https?:\/\//i.test(back)) { $('ret').style.display = 'block'; $('back').value = back; $('goBack').onclick = function () { var b = $('back').value; if (/^https?:\/\//i.test(b)) location.href = b + suffix; }; return; } location.href = back + suffix; }
+
+  function xhr(method, url, body, cb) {
+    var x = new XMLHttpRequest(); x.open(method, url);
+    if (body !== null) x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    x.onload = function () { cb(x.status, x.responseText); };
+    x.onerror = function () { cb(0, ''); };
+    x.send(body);
+  }
+
+  if (mode === 'send') {
+    var wn = window.name || '';
+    if (wn.indexOf('IPADAPPS_BACKUP:') !== 0) { setStatus('보낼 백업 데이터가 없어요. 앱의 백업/복원 화면에서 다시 시작하세요.', 'warn'); home('#fail'); return; }
+    var text = wn.substr(16); window.name = '';
+    setStatus('노트북에 저장하는 중...');
+    xhr('POST', '/api/backup', 'text=' + encodeURIComponent(text), function (st, res) {
+      if (st === 200) { setStatus('노트북에 저장했어요. 앱으로 돌아갑니다...', 'ok'); setTimeout(function () { home('#sent'); }, 700); }
+      else { setStatus('저장하지 못했어요 (' + st + ')', 'warn'); setTimeout(function () { home('#fail'); }, 1500); }
+    });
+  } else if (mode === 'restore') {
+    setStatus('노트북의 백업을 가져오는 중...');
+    xhr('GET', '/api/backup', null, function (st, res) {
+      if (st === 200) { window.name = 'IPADAPPS_RESTORE:' + res; setStatus('가져왔어요. 앱으로 돌아갑니다...', 'ok'); setTimeout(function () { home('#restore'); }, 500); }
+      else { setStatus(st === 404 ? '노트북에 저장된 백업이 없어요.' : '가져오지 못했어요 (' + st + ')', 'warn'); setTimeout(function () { home('#fail'); }, 1500); }
+    });
+  } else {
+    setStatus('앱의 백업/복원 화면에서 "노트북에 백업 보내기" 또는 "노트북에서 복원"을 눌러 들어오세요.', 'warn');
+  }
+})();
+</script>
+</body>
+</html>

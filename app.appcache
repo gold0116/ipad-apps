@@ -1,10 +1,12 @@
 CACHE MANIFEST
-# v16 2026-11-21
+# v19 2026-11-21
 
 emoji.js?v=16
 sound.js?v=16
 tetris.html
 mymusic.html
+backup.html
+midi-export.html
 report.html
 dino.html
 balloon.html

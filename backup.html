@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>백업/복원</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  h2 { font-size: 18px; margin: 22px 0 8px; border-left: 5px solid #2f6fed; padding-left: 8px; }
+  .box { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+  textarea { width: 100%; height: 120px; font-size: 12px; font-family: monospace; border: 1px solid #ccc; border-radius: 10px; padding: 8px; }
+  input[type=text], select { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+  .small { font-size: 13px; color: #777; }
+  .ok { color: #1a7f3c; } .warn { color: #c33; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 14px; }
+  td:last-child { text-align: right; color: #555; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 백업/복원</div>
+<div class="wrap">
+  <p class="small">이 기기의 앱 데이터(게임 최고 점수, 메모, 내 음악 곡, 설정)를 텍스트 하나로 백업하고, 다른 기기나 나중에 복원해요. Safari에서 "웹사이트 데이터"를 지우면 데이터가 사라지니 가끔 백업해 두세요.</p>
+
+  <div id="banner"></div>
+
+  <h2>1. 지금 저장된 데이터</h2>
+  <div class="box"><table id="sum"></table></div>
+
+  <h2>2. 백업 (내보내기)</h2>
+  <div class="box">
+    <textarea id="out" readonly></textarea>
+    <div style="margin-top:6px">
+      <button class="btn" id="mk">백업 텍스트 만들기</button>
+      <button class="btn gray" id="sel">전체 선택</button>
+      <button class="btn gray" id="cp">복사</button>
+    </div>
+    <div id="msg1" style="margin-top:6px"></div>
+    <div class="small">만든 텍스트를 메일이나 메모 앱으로 나에게 보내 두면 돼요.</div>
+  </div>
+
+  <h2>3. 복원 (불러오기)</h2>
+  <div class="box">
+    <textarea id="inp" placeholder="백업 텍스트를 여기에 붙여넣으세요"></textarea>
+    <p style="margin:8px 0 4px" class="small">복원 방식</p>
+    <select id="mode"><option value="merge">합치기 (점수는 더 좋은 값, 메모·곡은 없는 것만 추가)</option><option value="replace">덮어쓰기 (백업 내용으로 통째로 바꿈)</option></select>
+    <div style="margin-top:8px"><button class="btn" id="rs">복원하기</button></div>
+    <div id="msg2" style="margin-top:6px"></div>
+  </div>
+
+  <h2>4. 노트북 서버로 한 번에 보내기/가져오기 <span class="small">(선택 기능)</span></h2>
+  <div class="box">
+    <p class="small" style="margin-top:0">복사·붙여넣기 없이 버튼으로 노트북에 백업하고, 노트북의 백업을 불러와요. 로컬 서버(serve.ps1)가 켜져 있어야 해요.</p>
+    <div class="small">노트북 서버 주소</div>
+    <input type="text" id="srv" placeholder="http://노트북IP:8081">
+    <div style="margin-top:8px">
+      <button class="btn" id="toSrv">노트북에 백업 보내기</button>
+      <button class="btn gray" id="fromSrv">노트북에서 복원</button>
+    </div>
+    <div id="msg3" style="margin-top:6px"></div>
+  </div>
+</div>
+<script>
+(function () {
+  function $(i) { return document.getElementById(i); }
+  function say(id, t, cls) { var e = $(id); e.className = cls || ''; e.textContent = t; }
+  var MIN_BEST = { bestMemory: 1, bestSlide: 1 };       // 작을수록 좋은 기록
+  var LABELS = { best2048: '2048 최고점', bestSnake: '스네이크 최고점', bestDino: '공룡 달리기 최고점', bestBalloon2: '풍선 모험 최고점', bestTetris: '테트리스 최고점', bestMole: '두더지 잡기 최고점', bestMemory: '짝맞추기 최소 시도', bestSlide: '15퍼즐 최소 이동', 'memo-list-v1': '메모', 'mymusic-list-v1': '내 음악 곡' };
+
+  function readAll() {
+    var o = {};
+    // 노트북 주소 같은 이 기기 전용 설정은 백업에 넣지 않는다
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k.charAt(0) !== '_' && k !== 'backupServer' && k !== 'appBaseUrl') o[k] = localStorage.getItem(k); } } catch (e) {}
+    return o;
+  }
+  function count(v) { try { var a = JSON.parse(v); return a instanceof Array ? a.length + '개' : null; } catch (e) { return null; } }
+  function summary() {
+    var d = readAll(), h = '', n = 0;
+    for (var k in d) {
+      n++;
+      var c = count(d[k]);
+      h += '<tr><td>' + (LABELS[k] || k) + '</td><td>' + (c !== null ? c : String(d[k]).substr(0, 20)) + '</td></tr>';
+    }
+    $('sum').innerHTML = n ? h : '<tr><td colspan="2" class="small">저장된 데이터가 없어요</td></tr>';
+  }
+  function makeBackup() {
+    return JSON.stringify({ app: 'ipad-apps', version: 1, date: new Date().toString(), data: readAll() });
+  }
+
+  function parseBackup(txt) {
+    var o;
+    try { o = JSON.parse(txt.replace(/^\s+|\s+$/g, '')); } catch (e) { return null; }
+    if (!o || o.app !== 'ipad-apps' || !o.data) return null;
+    return o;
+  }
+  function mergeArray(a, b) { // a: 현재, b: 백업. 없는 것만 추가
+    var seen = {}, out = [], i, key;
+    function k(x) { return (x && x.id) ? 'id:' + x.id : JSON.stringify(x); }
+    for (i = 0; i < a.length; i++) { seen[k(a[i])] = 1; out.push(a[i]); }
+    for (i = 0; i < b.length; i++) { key = k(b[i]); if (!seen[key]) { seen[key] = 1; out.push(b[i]); } }
+    return out;
+  }
+  function restore(o, mode) {
+    var d = o.data, n = 0, k;
+    try {
+      if (mode === 'replace') { for (k in d) { localStorage.setItem(k, d[k]); n++; } return n; }
+      for (k in d) {
+        var cur = localStorage.getItem(k), v = d[k];
+        if (cur === null) { localStorage.setItem(k, v); n++; continue; }
+        if (k.indexOf('best') === 0) {
+          var a = parseFloat(cur), b = parseFloat(v);
+          if (!isNaN(b) && (isNaN(a) || (MIN_BEST[k] ? b < a : b > a))) { localStorage.setItem(k, v); n++; }
+          continue;
+        }
+        try {
+          var ca = JSON.parse(cur), cb = JSON.parse(v);
+          if (ca instanceof Array && cb instanceof Array) { var m = mergeArray(ca, cb); if (m.length !== ca.length) { localStorage.setItem(k, JSON.stringify(m)); n++; } continue; }
+        } catch (e) {}
+        // 그 밖의 설정은 현재 값을 유지
+      }
+    } catch (e) { return -1; }
+    return n;
+  }
+
+  $('mk').onclick = function () { $('out').value = makeBackup(); say('msg1', '백업 텍스트를 만들었어요 (' + Math.round($('out').value.length / 1024 * 10) / 10 + 'KB)', 'ok'); };
+  $('sel').onclick = function () { var t = $('out'); t.focus(); t.setSelectionRange(0, t.value.length); };
+  $('cp').onclick = function () {
+    var t = $('out'); if (!t.value) { say('msg1', '먼저 "백업 텍스트 만들기"를 누르세요', 'warn'); return; }
+    t.focus(); t.setSelectionRange(0, t.value.length);
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    say('msg1', ok ? '복사했어요' : '이 기기는 자동 복사가 안 돼요. 선택된 상태에서 "복사"를 눌러 주세요.', ok ? 'ok' : 'warn');
+  };
+  $('rs').onclick = function () {
+    var o = parseBackup($('inp').value);
+    if (!o) { say('msg2', '백업 텍스트가 아니에요. 처음부터 끝까지 그대로 붙여넣으세요.', 'warn'); return; }
+    var mode = $('mode').value;
+    if (mode === 'replace' && !confirm('현재 데이터를 백업 내용으로 바꿉니다. 계속할까요?')) return;
+    var n = restore(o, mode);
+    if (n < 0) say('msg2', '복원하지 못했어요(저장 공간 부족 등)', 'warn');
+    else { say('msg2', '복원했어요 (' + n + '개 항목 반영)', 'ok'); summary(); }
+  };
+
+  // ---- 노트북 서버 연동: 같은 탭에서 주소를 옮겨 다니며 window.name에 데이터를 실어 보낸다 ----
+  var SK = 'backupServer';
+  try { $('srv').value = localStorage.getItem(SK) || ''; } catch (e) {}
+  function server() {
+    var s = $('srv').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(s)) { say('msg3', '노트북 서버 주소를 http://로 시작하게 넣으세요 (예: http://192.168.0.10:8081)', 'warn'); return null; }
+    try { localStorage.setItem(SK, s); } catch (e) {}
+    return s;
+  }
+  var back = location.origin + location.pathname;
+  $('toSrv').onclick = function () {
+    var s = server(); if (!s) return;
+    window.name = 'IPADAPPS_BACKUP:' + makeBackup();
+    location.href = s + '/backup-bridge.html#send?back=' + encodeURIComponent(back);
+  };
+  $('fromSrv').onclick = function () {
+    var s = server(); if (!s) return;
+    window.name = '';
+    location.href = s + '/backup-bridge.html#restore?back=' + encodeURIComponent(back);
+  };
+
+  // 노트북에서 돌아왔을 때
+  var h = location.hash, wn = window.name || '';
+  if (h === '#sent') { $('banner').innerHTML = '<div class="box ok">노트북에 백업했어요.</div>'; try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  else if (h === '#fail') { $('banner').innerHTML = '<div class="box warn">노트북과 통신하지 못했어요. 서버가 켜져 있는지 확인하세요.</div>'; try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+  else if (h === '#restore' && wn.indexOf('IPADAPPS_RESTORE:') === 0) {
+    var txt = wn.substr(17); window.name = '';
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    var o = parseBackup(txt);
+    if (o) {
+      $('inp').value = txt;
+      $('banner').innerHTML = '<div class="box ok">노트북의 백업을 불러왔어요 (' + String(o.date || '').substr(0, 24) + '). 아래 3번에서 복원 방식을 고르고 <b>복원하기</b>를 누르세요.</div>';
+      window.scrollTo(0, $('inp').offsetTop - 80);
+    } else { $('banner').innerHTML = '<div class="box warn">노트북에서 가져온 데이터가 올바르지 않아요.</div>'; }
+  } else if (wn.indexOf('IPADAPPS_') === 0) { window.name = ''; } // 남은 데이터 정리
+
+  summary();
+})();
+</script>
+</body>
+</html>

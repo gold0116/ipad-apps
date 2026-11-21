@@ -42,6 +42,7 @@
   <p id="empty" style="color:#888;font-size:15px;display:none">저장된 곡이 없어요. 아래에서 곡 텍스트를 붙여넣어 저장하세요.</p>
 
   <h2>곡 추가</h2>
+  <p style="font-size:14px;margin:0 0 8px"><a href="midi-export.html" style="color:#2f6fed">MIDI 파일에서 곡 텍스트 만들기 →</a></p>
   <div class="card">
     <p style="margin:0 0 4px;font-size:14px">곡 이름</p>
     <input type="text" id="nm" placeholder="(비우면 텍스트 안의 이름을 써요)">
@@ -130,7 +131,22 @@
     render();
   };
 
-  load(); render();
+  // 노트북 서버의 MIDI 변환 화면에서 "보내기"로 넘어온 곡을 자동 등록 (주소 뒤 #import=곡텍스트)
+  function importFromHash() {
+    var h = location.hash || '';
+    if (h.indexOf('#import=') !== 0) return;
+    var raw = '';
+    try { raw = decodeURIComponent(h.substr(8)); } catch (e) { say('넘어온 주소가 올바르지 않아요', true); return; }
+    var p = parseText(raw);
+    if (!p.ok) { say(p.error, true); return; }
+    var name = p.obj.name || '가져온 곡';
+    list.push({ id: 's' + new Date().getTime(), name: name, count: p.count, seconds: p.seconds, text: JSON.stringify(p.obj) });
+    if (store()) { say('"' + name + '"을(를) 가져왔어요', false); $('hint').style.color = '#1a7f3c'; $('hint').textContent = '"' + name + '"을(를) 가져왔어요. 아래 곡 목록에서 재생하세요.'; }
+    else list.pop();
+    try { history.replaceState(null, '', location.pathname); } catch (e) { location.hash = ''; }
+  }
+
+  load(); importFromHash(); render();
 })();
 </script>
 </body>
