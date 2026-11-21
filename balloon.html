@@ -17,6 +17,7 @@
   <canvas id="cv" width="360" height="540"></canvas>
   <p style="text-align:center;color:#888;margin:6px 0">손가락을 좌우로 움직여 풍선을 조종하세요</p>
 </div>
+<script src="sound.js"></script>
 <script>
 (function () {
   var W = 360, H = 540;
@@ -87,17 +88,17 @@
       var dx = bx - o.x, dy = cy - o.y, d = Math.sqrt(dx * dx + dy * dy);
       if (o.k === 'coin' && magnet > 0 && d < 150 && d > 1) { o.x += dx / d * 0.45 * dt; o.y += dy / d * 0.45 * dt; }
       if (o.y > H + 60 || o.x < -70 || o.x > W + 70) { objs.splice(i, 1); continue; }
-      if (o.k === 'coin') { if (d < o.r + 22) { coins++; objs.splice(i, 1); } }
+      if (o.k === 'coin') { if (d < o.r + 22) { coins++; objs.splice(i, 1); SFX.play('coin'); } }
       else if (o.k === 'item') {
-        if (d < o.r + 22) { if (o.kind === 'magnet') magnet = 6000; else if (o.kind === 'slow') slow = 5000; else shield = 5000; objs.splice(i, 1); flash = 150; }
+        if (d < o.r + 22) { if (o.kind === 'magnet') magnet = 6000; else if (o.kind === 'slow') slow = 5000; else shield = 5000; objs.splice(i, 1); flash = 150; SFX.play('item'); }
       } else if (d < o.r + 18) {
-        if (shield > 0) { objs.splice(i, 1); flash = 100; } else { die(); return; }
+        if (shield > 0) { objs.splice(i, 1); flash = 100; SFX.play('drop'); } else { die(); return; }
       }
     }
   }
   function score() { return Math.floor(meters) + coins * 10; }
   function die() {
-    state = 'over'; overAt = Date.now();
+    state = 'over'; overAt = Date.now(); SFX.play('over');
     if (score() > best) { best = score(); try { localStorage.setItem('bestBalloon2', best); } catch (e) {} }
   }
 

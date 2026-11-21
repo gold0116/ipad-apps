@@ -1,7 +1,9 @@
 CACHE MANIFEST
-# v9 2026-11-21
+# v10 2026-11-21
 
 emoji.js
+sound.js
+tetris.html
 report.html
 dino.html
 balloon.html

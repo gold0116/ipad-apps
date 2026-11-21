@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>테트리스</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #game { display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; margin-top: 8px; }
+  #cv { background: #14161c; border-radius: 6px; }
+  #side { margin-left: 10px; width: 96px; color: #222; font-size: 15px; }
+  #side .lb { color: #777; font-size: 12px; margin-top: 8px; }
+  #side .v { font-size: 20px; font-weight: bold; }
+  #nx { background: #14161c; border-radius: 6px; display: block; }
+  .pad { text-align: center; margin-top: 8px; }
+  .pad .btn { width: 18%; padding: 16px 0; font-size: 20px; margin: 3px 0.6%; }
+  .pad .btn.big { width: 38%; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 테트리스</div>
+<div class="wrap" style="padding:0 8px">
+  <div id="game">
+    <canvas id="cv" width="300" height="600"></canvas>
+    <div id="side">
+      <canvas id="nx" width="96" height="96"></canvas>
+      <div class="lb">점수</div><div class="v" id="sc">0</div>
+      <div class="lb">줄</div><div class="v" id="ln">0</div>
+      <div class="lb">레벨</div><div class="v" id="lv">1</div>
+      <div class="lb">최고</div><div class="v" id="best">0</div>
+      <button class="btn gray" id="pause" style="width:100%;margin:10px 0 0;padding:10px 0;font-size:15px">일시정지</button>
+      <button class="btn red" id="new" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">새 게임</button>
+    </div>
+  </div>
+  <div class="pad">
+    <button class="btn" id="bl">◀</button><button class="btn" id="br">▶</button><button class="btn" id="bd">▼</button><button class="btn" id="bs">⟳</button><button class="btn gray" id="bh">떨구기</button>
+  </div>
+</div>
+<script src="sound.js"></script>
+<script>
+(function () {
+  var COLS = 10, ROWS = 20;
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var nx = document.getElementById('nx'), nctx = nx.getContext('2d');
+  var CELL = 30;
+  var COLORS = ['', '#38c6e8', '#f2d03b', '#a05cd6', '#4cc15a', '#e5484d', '#3b6fe0', '#f0922f'];
+  var SHAPES = [
+    null,
+    [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],   // I
+    [[2,2],[2,2]],                                 // O
+    [[0,3,0],[3,3,3],[0,0,0]],                     // T
+    [[0,4,4],[4,4,0],[0,0,0]],                     // S
+    [[5,5,0],[0,5,5],[0,0,0]],                     // Z
+    [[6,0,0],[6,6,6],[0,0,0]],                     // J
+    [[0,0,7],[7,7,7],[0,0,0]]                      // L
+  ];
+  var board, cur, nextId, bag, score, lines, level, best = 0, state = 'ready', timer = null, dropMs;
+  try { best = parseInt(localStorage.getItem('bestTetris') || '0', 10) || 0; } catch (e) {}
+  function $(i) { return document.getElementById(i); }
+
+  function layout() {
+    var availW = window.innerWidth - 16 - 106, availH = window.innerHeight - 56 - 100;
+    var c = Math.floor(Math.min(availW / COLS, availH / ROWS));
+    if (c > 34) c = 34; if (c < 14) c = 14;
+    CELL = c;
+    cv.width = COLS * c; cv.height = ROWS * c;
+    draw();
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+
+  function emptyBoard() { var b = []; for (var r = 0; r < ROWS; r++) { var row = []; for (var c = 0; c < COLS; c++) row.push(0); b.push(row); } return b; }
+  function nextFromBag() {
+    if (!bag || !bag.length) { bag = [1,2,3,4,5,6,7]; for (var i = bag.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = bag[i]; bag[i] = bag[j]; bag[j] = t; } }
+    return bag.pop();
+  }
+  function cloneShape(id) { var s = SHAPES[id], o = []; for (var r = 0; r < s.length; r++) o.push(s[r].slice()); return o; }
+  function newPiece(id) { var m = cloneShape(id); return { id: id, m: m, x: Math.floor((COLS - m[0].length) / 2), y: id === 1 ? -1 : 0 }; }
+
+  function collide(m, x, y) {
+    for (var r = 0; r < m.length; r++) for (var c = 0; c < m[r].length; c++) {
+      if (!m[r][c]) continue;
+      var bx = x + c, by = y + r;
+      if (bx < 0 || bx >= COLS || by >= ROWS) return true;
+      if (by >= 0 && board[by][bx]) return true;
+    }
+    return false;
+  }
+  function rotated(m) { var n = m.length, o = []; for (var r = 0; r < n; r++) { o.push([]); for (var c = 0; c < n; c++) o[r].push(m[n - 1 - c][r]); } return o; }
+
+  function spawn() {
+    cur = newPiece(nextId); nextId = nextFromBag();
+    if (collide(cur.m, cur.x, cur.y)) { gameOver(); }
+    drawNext();
+  }
+  function reset() {
+    board = emptyBoard(); bag = []; score = 0; lines = 0; level = 1; dropMs = 800;
+    nextId = nextFromBag(); spawn(); state = 'run'; schedule(); updateInfo(); draw();
+  }
+  function schedule() { clearInterval(timer); timer = setInterval(tick, dropMs); }
+  function tick() { if (state === 'run') softStep(); }
+
+  function move(dx) {
+    if (state !== 'run') return;
+    if (!collide(cur.m, cur.x + dx, cur.y)) { cur.x += dx; SFX.play('move'); draw(); }
+  }
+  function rotate() {
+    if (state !== 'run' || cur.id === 2) return;
+    var m = rotated(cur.m), kicks = [0, -1, 1, -2, 2];
+    for (var i = 0; i < kicks.length; i++) {
+      if (!collide(m, cur.x + kicks[i], cur.y)) { cur.m = m; cur.x += kicks[i]; SFX.play('rotate'); draw(); return; }
+      if (!collide(m, cur.x + kicks[i], cur.y - 1)) { cur.m = m; cur.x += kicks[i]; cur.y -= 1; SFX.play('rotate'); draw(); return; }
+    }
+  }
+  function softStep() {
+    if (!collide(cur.m, cur.x, cur.y + 1)) { cur.y++; draw(); return true; }
+    lock(); return false;
+  }
+  function hardDrop() {
+    if (state !== 'run') return;
+    var n = 0;
+    while (!collide(cur.m, cur.x, cur.y + 1)) { cur.y++; n++; }
+    score += n * 2; SFX.play('drop'); lock();
+  }
+  function lock() {
+    for (var r = 0; r < cur.m.length; r++) for (var c = 0; c < cur.m[r].length; c++) {
+      if (cur.m[r][c]) { var by = cur.y + r; if (by >= 0) board[by][cur.x + c] = cur.m[r][c]; }
+    }
+    var cleared = 0;
+    for (var y = ROWS - 1; y >= 0; y--) {
+      var full = true;
+      for (var x = 0; x < COLS; x++) if (!board[y][x]) { full = false; break; }
+      if (full) { board.splice(y, 1); var nr = []; for (var k = 0; k < COLS; k++) nr.push(0); board.unshift(nr); cleared++; y++; }
+    }
+    if (cleared) {
+      score += [0, 100, 300, 500, 800][cleared] * level; lines += cleared;
+      SFX.play(cleared === 4 ? 'tetris' : 'line');
+      var nl = Math.floor(lines / 10) + 1;
+      if (nl !== level) { level = nl; dropMs = Math.max(90, 800 - (level - 1) * 70); schedule(); }
+    }
+    updateInfo();
+    spawn(); draw();
+  }
+  function gameOver() {
+    state = 'over'; clearInterval(timer); SFX.play('over');
+    if (score > best) { best = score; try { localStorage.setItem('bestTetris', best); } catch (e) {} }
+    updateInfo(); draw();
+  }
+  function updateInfo() { $('sc').textContent = score; $('ln').textContent = lines; $('lv').textContent = level; $('best').textContent = Math.max(best, score); }
+
+  function cell(c2, x, y, id, size, alpha) {
+    c2.globalAlpha = alpha || 1;
+    c2.fillStyle = COLORS[id]; c2.fillRect(x + 1, y + 1, size - 2, size - 2);
+    c2.fillStyle = 'rgba(255,255,255,0.25)'; c2.fillRect(x + 1, y + 1, size - 2, 3);
+    c2.globalAlpha = 1;
+  }
+  function draw() {
+    if (!board) return;
+    var W = cv.width, H = cv.height, r, c;
+    ctx.fillStyle = '#14161c'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#232734'; ctx.lineWidth = 1;
+    for (c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * CELL + 0.5, 0); ctx.lineTo(c * CELL + 0.5, H); ctx.stroke(); }
+    for (r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * CELL + 0.5); ctx.lineTo(W, r * CELL + 0.5); ctx.stroke(); }
+    for (r = 0; r < ROWS; r++) for (c = 0; c < COLS; c++) if (board[r][c]) cell(ctx, c * CELL, r * CELL, board[r][c], CELL);
+    if (cur && state !== 'over') {
+      var gy = cur.y; while (!collide(cur.m, cur.x, gy + 1)) gy++;
+      for (r = 0; r < cur.m.length; r++) for (c = 0; c < cur.m[r].length; c++) if (cur.m[r][c]) {
+        if (gy + r >= 0) cell(ctx, (cur.x + c) * CELL, (gy + r) * CELL, cur.m[r][c], CELL, 0.22);
+      }
+      for (r = 0; r < cur.m.length; r++) for (c = 0; c < cur.m[r].length; c++) if (cur.m[r][c]) {
+        if (cur.y + r >= 0) cell(ctx, (cur.x + c) * CELL, (cur.y + r) * CELL, cur.m[r][c], CELL);
+      }
+    }
+    ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 4;
+    ctx.font = 'bold ' + Math.round(CELL * 0.9) + 'px sans-serif';
+    var msg = state === 'ready' ? '새 게임을 누르세요' : state === 'over' ? '게임 오버' : state === 'pause' ? '일시정지' : '';
+    if (msg) { ctx.strokeText(msg, W / 2, H / 2); ctx.fillText(msg, W / 2, H / 2); }
+  }
+  function drawNext() {
+    nctx.fillStyle = '#14161c'; nctx.fillRect(0, 0, 96, 96);
+    if (!nextId) return;
+    var m = SHAPES[nextId], s = 20, w = m[0].length * s, ox = Math.round((96 - w) / 2), oy = Math.round((96 - m.length * s) / 2) + (nextId === 1 ? -10 : 0);
+    for (var r = 0; r < m.length; r++) for (var c = 0; c < m[r].length; c++) if (m[r][c]) cell(nctx, ox + c * s, oy + r * s, m[r][c], s);
+  }
+
+  // 누르고 있으면 반복되는 버튼
+  function hold(id, fn, repeat) {
+    var el = $(id), t1 = null, t2 = null;
+    function stop() { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; }
+    function go() { fn(); if (repeat) { t1 = setTimeout(function () { t2 = setInterval(fn, 70); }, 180); } }
+    el.addEventListener('touchstart', function (e) { e.preventDefault(); go(); }, false);
+    el.addEventListener('touchend', function (e) { e.preventDefault(); stop(); }, false);
+    el.addEventListener('touchcancel', stop, false);
+    el.addEventListener('mousedown', go, false);
+    el.addEventListener('mouseup', stop, false);
+    el.addEventListener('mouseleave', stop, false);
+  }
+  hold('bl', function () { move(-1); }, true);
+  hold('br', function () { move(1); }, true);
+  hold('bd', function () { if (state === 'run') { if (softStep()) { score += 1; updateInfo(); } } }, true);
+  hold('bs', rotate, false);
+  hold('bh', hardDrop, false);
+  function press(id, fn) {
+    var el = $(id);
+    el.addEventListener('touchstart', function (e) { e.preventDefault(); fn(); }, false);
+    el.addEventListener('click', function () { fn(); }, false);
+  }
+  press('new', function () { reset(); });
+  press('pause', function () {
+    if (state === 'run') { state = 'pause'; clearInterval(timer); $('pause').textContent = '계속'; draw(); }
+    else if (state === 'pause') { state = 'run'; schedule(); $('pause').textContent = '일시정지'; draw(); }
+  });
+  document.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
+  document.addEventListener('keydown', function (e) {
+    var k = e.keyCode;
+    if (k === 37) { e.preventDefault(); move(-1); }
+    else if (k === 39) { e.preventDefault(); move(1); }
+    else if (k === 40) { e.preventDefault(); if (state === 'run' && softStep()) { score++; updateInfo(); } }
+    else if (k === 38) { e.preventDefault(); rotate(); }
+    else if (k === 32) { e.preventDefault(); if (state === 'ready' || state === 'over') reset(); else hardDrop(); }
+  }, false);
+
+  board = emptyBoard(); layout(); drawNext(); updateInfo();
+})();
+</script>
+</body>
+</html>

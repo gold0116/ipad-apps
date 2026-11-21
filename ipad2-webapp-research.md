@@ -4,6 +4,17 @@
 - 조사 방법: WebSearch 9회(영어/한국어)와 WebFetch로 후보 페이지 확인. 아래 "근거" 열은 실제로 읽은 내용만 근거로 삼았습니다.
 - 표기 규칙: **확인됨** = 글에서 iOS 9/구형 브라우저 동작이 명시됨, **간접** = 구형 브라우저용으로 설계됐다는 설명만 있고 iOS 9 Safari 직접 언급은 없음, **미확인** = 근거 없음.
 
+## 바로 실행해 볼 수 있는 데모 (2026-11-21 확인)
+
+GitHub API와 접속 시험으로 확인했습니다. "서버 응답"은 이 노트북에서 열렸다는 뜻이고, **iPad 2에서 돌아가는지는 직접 눌러 보고 아래 표를 갱신해야 합니다.**
+
+| 이름 | 실행 데모 | 소스 | 서버 응답 | iPad 2 동작 |
+|---|---|---|---|---|
+| iampavangandhi/JSGames | https://iampavangandhi.github.io/JSGames/ | https://github.com/iampavangandhi/JSGames | 정상(200) | 미확인. 코드가 가장 오래돼(2020) 동작 가능성이 상대적으로 높음 |
+| taihen/games | https://taihen.github.io/games/ | https://github.com/taihen/games | 정상(200) | 미확인. ES 모듈 사용, 구형 Safari에서는 안 될 가능성이 큼 |
+| viveknathani/games | https://games.vivekn.dev | https://github.com/viveknathani/games | 정상(200) | 미확인. 최신 코드(AI 도움)라 안 될 가능성이 큼 |
+| Tuinha/games | 데모 없음 | https://github.com/Tuinha/games | - | 코드만 있음(GitHub Pages 꺼짐) |
+
 ## 요약
 
 1. "iPad 2 / iOS 9 전용 웹앱 큐레이션 사이트"나 "ES5 호환을 명시한 웹게임 GitHub 저장소 목록"은 검색으로 찾지 못했습니다.
