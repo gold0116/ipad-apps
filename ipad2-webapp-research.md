@@ -6,13 +6,13 @@
 
 ## 바로 실행해 볼 수 있는 데모 (2026-11-21 확인)
 
-GitHub API와 접속 시험으로 확인했습니다. "서버 응답"은 이 노트북에서 열렸다는 뜻이고, **iPad 2에서 돌아가는지는 직접 눌러 보고 아래 표를 갱신해야 합니다.**
+GitHub API와 접속 시험으로 확인했습니다. "서버 응답"은 이 노트북에서 열렸다는 뜻이고, "iPad 2 동작"은 iPad 2(iOS 9.3.5)에서 직접 열어 본 결과입니다. **결론: 이 데모들 중 iPad 2에서 즐길 수 있는 게임은 없었습니다.** 구형 Safari에서 되는 게임은 직접 ES5로 만드는 것이 현실적이었습니다.
 
 | 이름 | 실행 데모 | 소스 | 서버 응답 | iPad 2 동작 |
 |---|---|---|---|---|
-| iampavangandhi/JSGames | https://iampavangandhi.github.io/JSGames/ | https://github.com/iampavangandhi/JSGames | 정상(200) | 미확인. 코드가 가장 오래돼(2020) 동작 가능성이 상대적으로 높음 |
-| taihen/games | https://taihen.github.io/games/ | https://github.com/taihen/games | 정상(200) | 미확인. ES 모듈 사용, 구형 Safari에서는 안 될 가능성이 큼 |
-| viveknathani/games | https://games.vivekn.dev | https://github.com/viveknathani/games | 정상(200) | 미확인. 최신 코드(AI 도움)라 안 될 가능성이 큼 |
+| iampavangandhi/JSGames | https://iampavangandhi.github.io/JSGames/ | https://github.com/iampavangandhi/JSGames | 정상(200) | **확인함(2026-11-21)**: 화면은 실행되지만 화면 비율과 크기(스케일)가 안 맞고 터치가 안 되어 게임을 즐길 수 없음 |
+| taihen/games | https://taihen.github.io/games/ | https://github.com/taihen/games | 정상(200) | **확인함(2026-11-21)**: 화면이 나오지 않음(ES 모듈 사용 때문으로 추정, 미확인) |
+| viveknathani/games | https://games.vivekn.dev | https://github.com/viveknathani/games | 정상(200) | **확인함(2026-11-21)**: 화면이 나오지 않음(최신 코드라 구형 Safari 미지원으로 추정, 미확인) |
 | Tuinha/games | 데모 없음 | https://github.com/Tuinha/games | - | 코드만 있음(GitHub Pages 꺼짐) |
 
 ## 요약
