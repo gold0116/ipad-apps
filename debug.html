@@ -120,6 +120,20 @@
     <div style="font-size:20px">20px 가 🐹</div>
     <div style="font-size:50px">50px 가 🐹</div>
     <div style="font-size:100px;line-height:110px">100px 가 🐹</div></div>
+
+  <h2>한자 글꼴 시험 (장기 기물)</h2>
+  <p style="font-size:14px;color:#666">장기 기물에 쓰는 한자예요. 네모(□)나 빈칸 없이 <b>글자 모양</b>으로 모두 보이면 장기에서 "한자"를 쓸 수 있어요. 아래 두 줄 모두 확인해 주세요.</p>
+  <div class="row"><div class="lb">M. 일반 글자 (초: 楚 卒 / 한: 漢 兵 / 공통: 象 馬 車 包 士)</div>
+    <div style="font-size:40px;line-height:50px"><span style="color:#1d7a3a">楚卒</span> <span style="color:#c0262d">漢兵</span> 象馬車包士</div></div>
+  <div class="row"><div class="lb">N. 캔버스에 그린 글자 (장기 판과 같은 방식)</div>
+    <canvas id="hcv" width="320" height="70" style="background:#e8c277;border-radius:8px"></canvas></div>
+  <script>
+    (function () {
+      var c = document.getElementById('hcv'), x = c.getContext('2d'), t = '楚漢卒兵象馬車包士', i;
+      x.font = 'bold 34px Helvetica,Arial,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      for (i = 0; i < t.length; i++) { x.fillStyle = i % 2 ? '#c0262d' : '#1d7a3a'; x.fillText(t.charAt(i), 20 + i * 35, 36); }
+    })();
+  </script>
 </div>
 <script src="emoji.js?v=16"></script>
 <script src="sound.js?v=24"></script>

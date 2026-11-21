@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>장기</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #info { text-align: center; font-size: 18px; margin: 4px 0 8px; }
+  canvas { display: block; margin: 0 auto; border-radius: 4px; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; color: #333; height: 28px; margin-top: 6px; }
+  #mv { text-align: center; font-size: 17px; min-height: 22px; margin-top: 4px; color: #555; }
+  .row { text-align: center; margin: 6px 0; }
+  select { font-size: 18px; }
+  #note { display: none; margin: 8px auto 0; max-width: 560px; padding: 8px 12px; background: #fff8e1; border: 1px solid #f0d58a; border-radius: 8px; font-size: 15px; line-height: 1.5; color: #444; }
+  #note b { color: #8a5a00; }
+  #note p { margin: 0 0 4px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 장기</div>
+<div class="wrap">
+  <div class="row">
+    <select id="side"><option value="1">내가 초(먼저)</option><option value="-1">내가 한(나중)</option></select>
+    <select id="lvl"><option value="1">쉬움</option><option value="2" selected>보통</option><option value="3">어려움</option></select>
+  </div>
+  <div class="row">
+    <select id="setup"><option value="0">상차림 마상마상</option><option value="1">상차림 상마상마</option><option value="2">상차림 마상상마</option><option value="3">상차림 상마마상</option></select>
+    <select id="glyph"><option value="1">기물 한자(楚漢)</option><option value="0">기물 한글</option></select>
+  </div>
+  <div class="row">
+    <button class="btn gray" id="go">새 게임</button>
+    <button class="btn gray" id="undo">무르기</button>
+    <button class="btn gray" id="pass">한 수 쉼</button>
+  </div>
+  <div id="info">전적 <b id="w">0</b>승 <b id="l">0</b>패 <b id="d">0</b>무</div>
+  <canvas id="cv" width="444" height="492"></canvas>
+  <div id="msg"></div>
+  <div id="mv"></div>
+  <div id="note"></div>
+  <p style="text-align:center;color:#888">내 기물을 누르면 갈 수 있는 곳이 표시되고, 기물마다 움직이는 방법이 설명됩니다. 초(녹색)가 먼저 둡니다. 장은 궁성 가운데 큰 기물(초 楚 / 한 漢)입니다.</p>
+  <p style="text-align:center;color:#888;font-size:14px;line-height:1.5">용어: 장군 = 상대 장을 공격 중(체스의 체크) · 외통수 = 장군을 피할 수 없어 끝남(체크메이트) · 빅장 = 두 장이 마주 봄(무승부) · 한 수 쉼 = 장군이 아닐 때 쉬기<br>소리: 짧은 "뚝" = 이동 · 낮은 "쿵" + 붉은 번쩍임 = 기물 잡음 · 올라가는 멜로디 + "장군!" = 장군 · 팡파르 = 내 승리 · 내려가는 소리 = 내 패배</p>
+</div>
+<script>
+(function () {
+  function $(i) { return document.getElementById(i); }
+  var cv = $('cv'), ctx = cv.getContext('2d'), W = 444, H = 492, M = 30, CW = 48;
+
+  // ===== 규칙 =====
+  // 기물: 1졸/병 2상 3마 4차 5포 6사 7장 (초는 +, 한은 -). 칸 번호 = 행*9+열, 행 0이 한(위), 행 9가 초(아래)
+  var VAL = [0, 200, 300, 500, 1300, 700, 300, 0];
+  var NAMES = ['', '졸', '상', '마', '차', '포', '사', '장'];
+  var OD = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  var SETUPS = [[3, 2, 3, 2], [2, 3, 2, 3], [3, 2, 2, 3], [2, 3, 3, 2]];
+  var DN = [], DI;
+  for (DI = 0; DI < 90; DI++) DN[DI] = [];
+  (function () {
+    var rs = [0, 7], k, r0, ctr, cs, j;
+    for (k = 0; k < 2; k++) {
+      r0 = rs[k]; ctr = (r0 + 1) * 9 + 4;
+      cs = [r0 * 9 + 3, r0 * 9 + 5, (r0 + 2) * 9 + 3, (r0 + 2) * 9 + 5];
+      for (j = 0; j < 4; j++) { DN[ctr].push(cs[j]); DN[cs[j]].push(ctr); }
+    }
+  })();
+  function inb(r, c) { return r >= 0 && r < 10 && c >= 0 && c < 9; }
+  function linked(a, b) { var L = DN[a], i; for (i = 0; i < L.length; i++) if (L[i] === b) return true; return false; }
+  function dstep(sq, dr, dc) {
+    var r = ((sq / 9) | 0) + dr, c = (sq % 9) + dc;
+    if (!inb(r, c)) return -1;
+    var n = r * 9 + c;
+    return linked(sq, n) ? n : -1;
+  }
+  function inPal(r, c, t) { return c >= 3 && c <= 5 && (t === 1 ? (r >= 7 && r <= 9) : (r >= 0 && r <= 2)); }
+
+  function startState(setup) {
+    var b = [], i, c, s = SETUPS[setup];
+    for (i = 0; i < 90; i++) b[i] = 0;
+    function row(r, sg, gr, cr, sr, hr) {
+      b[r * 9 + 0] = 4 * sg; b[r * 9 + 1] = s[0] * sg; b[r * 9 + 2] = s[1] * sg; b[r * 9 + 3] = 6 * sg;
+      b[r * 9 + 5] = 6 * sg; b[r * 9 + 6] = s[2] * sg; b[r * 9 + 7] = s[3] * sg; b[r * 9 + 8] = 4 * sg;
+      b[gr * 9 + 4] = 7 * sg; b[cr * 9 + 1] = 5 * sg; b[cr * 9 + 7] = 5 * sg;
+      for (c = 0; c < 9; c += 2) b[sr * 9 + c] = sg;
+    }
+    row(0, -1, 1, 2, 3);
+    row(9, 1, 8, 7, 6);
+    return { b: b, turn: 1, half: 0, pass: 0 };
+  }
+  function gen(st) {
+    var b = st.b, t = st.turn, out = [], i, p, ty, r, c, k, rr, cc, q, n, L, j, s2, dr, dc, r1, c1, r2, c2, r3, c3, sq, nn, fr;
+    for (i = 0; i < 90; i++) {
+      p = b[i]; if (p * t <= 0) continue;
+      ty = p > 0 ? p : -p; r = (i / 9) | 0; c = i % 9;
+      if (ty === 1) {
+        fr = t === 1 ? -1 : 1; rr = r + fr;
+        if (rr >= 0 && rr < 10 && b[rr * 9 + c] * t <= 0) out.push({ f: i, t: rr * 9 + c });
+        for (k = -1; k <= 1; k += 2) { cc = c + k; if (cc >= 0 && cc < 9 && b[r * 9 + cc] * t <= 0) out.push({ f: i, t: r * 9 + cc }); }
+        L = DN[i];
+        for (j = 0; j < L.length; j++) if (((L[j] / 9) | 0) - r === fr && b[L[j]] * t <= 0) out.push({ f: i, t: L[j] });
+      } else if (ty === 6 || ty === 7) {
+        for (k = 0; k < 4; k++) {
+          rr = r + OD[k][0]; cc = c + OD[k][1];
+          if (inPal(rr, cc, t) && b[rr * 9 + cc] * t <= 0) out.push({ f: i, t: rr * 9 + cc });
+        }
+        L = DN[i];
+        for (j = 0; j < L.length; j++) if (b[L[j]] * t <= 0) out.push({ f: i, t: L[j] });
+      } else if (ty === 3) {
+        for (k = 0; k < 4; k++) {
+          dr = OD[k][0]; dc = OD[k][1]; r1 = r + dr; c1 = c + dc;
+          if (!inb(r1, c1) || b[r1 * 9 + c1]) continue;
+          for (s2 = -1; s2 <= 1; s2 += 2) {
+            if (dr !== 0) { r2 = r1 + dr; c2 = c1 + s2; } else { r2 = r1 + s2; c2 = c1 + dc; }
+            if (inb(r2, c2) && b[r2 * 9 + c2] * t <= 0) out.push({ f: i, t: r2 * 9 + c2 });
+          }
+        }
+      } else if (ty === 2) {
+        for (k = 0; k < 4; k++) {
+          dr = OD[k][0]; dc = OD[k][1]; r1 = r + dr; c1 = c + dc;
+          if (!inb(r1, c1) || b[r1 * 9 + c1]) continue;
+          for (s2 = -1; s2 <= 1; s2 += 2) {
+            if (dr !== 0) { r2 = r1 + dr; c2 = c1 + s2; r3 = r2 + dr; c3 = c2 + s2; }
+            else { r2 = r1 + s2; c2 = c1 + dc; r3 = r2 + s2; c3 = c2 + dc; }
+            if (!inb(r2, c2) || b[r2 * 9 + c2] || !inb(r3, c3)) continue;
+            if (b[r3 * 9 + c3] * t <= 0) out.push({ f: i, t: r3 * 9 + c3 });
+          }
+        }
+      } else if (ty === 4) {
+        for (k = 0; k < 4; k++) {
+          rr = r + OD[k][0]; cc = c + OD[k][1];
+          while (inb(rr, cc)) {
+            q = b[rr * 9 + cc]; if (q * t > 0) break;
+            out.push({ f: i, t: rr * 9 + cc }); if (q) break;
+            rr += OD[k][0]; cc += OD[k][1];
+          }
+        }
+        L = DN[i];
+        for (j = 0; j < L.length; j++) {
+          dr = ((L[j] / 9) | 0) - r; dc = (L[j] % 9) - c; sq = L[j];
+          while (sq >= 0) {
+            q = b[sq]; if (q * t > 0) break;
+            out.push({ f: i, t: sq }); if (q) break;
+            sq = dstep(sq, dr, dc);
+          }
+        }
+      } else if (ty === 5) {
+        for (k = 0; k < 4; k++) {
+          dr = OD[k][0]; dc = OD[k][1]; rr = r + dr; cc = c + dc;
+          while (inb(rr, cc) && !b[rr * 9 + cc]) { rr += dr; cc += dc; }
+          if (!inb(rr, cc)) continue;
+          q = b[rr * 9 + cc]; if (q === 5 || q === -5) continue;
+          rr += dr; cc += dc;
+          while (inb(rr, cc)) {
+            q = b[rr * 9 + cc];
+            if (!q) { out.push({ f: i, t: rr * 9 + cc }); rr += dr; cc += dc; continue; }
+            if (q * t < 0 && q !== 5 && q !== -5) out.push({ f: i, t: rr * 9 + cc });
+            break;
+          }
+        }
+        L = DN[i];
+        for (j = 0; j < L.length; j++) {
+          dr = ((L[j] / 9) | 0) - r; dc = (L[j] % 9) - c; sq = L[j];
+          while (sq >= 0 && !b[sq]) sq = dstep(sq, dr, dc);
+          if (sq < 0) continue;
+          q = b[sq]; if (q === 5 || q === -5) continue;
+          sq = dstep(sq, dr, dc);
+          while (sq >= 0) {
+            q = b[sq];
+            if (!q) { out.push({ f: i, t: sq }); sq = dstep(sq, dr, dc); continue; }
+            if (q * t < 0 && q !== 5 && q !== -5) out.push({ f: i, t: sq });
+            break;
+          }
+        }
+      }
+    }
+    return out;
+  }
+  function make(st, m) {
+    var b = st.b.slice(), cap = b[m.t];
+    b[m.t] = b[m.f]; b[m.f] = 0;
+    return { b: b, turn: -st.turn, half: cap ? 0 : st.half + 1, pass: 0 };
+  }
+  function passState(st) { return { b: st.b, turn: -st.turn, half: st.half + 1, pass: st.pass + 1 }; }
+  function genAt(st) { return gen(st); }
+  function generalAt(b, col) { for (var i = 0; i < 90; i++) if (b[i] === 7 * col) return i; return -1; }
+  function attackedGeneral(b, col) {
+    // col 색 장이 상대에게 공격받는가
+    var k = generalAt(b, col), ms, i;
+    if (k < 0) return true;
+    ms = gen({ b: b, turn: -col });
+    for (i = 0; i < ms.length; i++) if (ms[i].t === k) return true;
+    return false;
+  }
+  function inCheck(st) { return attackedGeneral(st.b, st.turn); }
+  function legal(st) {
+    var ms = gen(st), out = [], i, ns;
+    for (i = 0; i < ms.length; i++) {
+      ns = make(st, ms[i]);
+      if (!attackedGeneral(ns.b, st.turn)) out.push(ms[i]);
+    }
+    return out;
+  }
+  function bikjang(st) {
+    var a = generalAt(st.b, 1), c = generalAt(st.b, -1), r;
+    if (a < 0 || c < 0 || a % 9 !== c % 9) return false;
+    for (r = ((c / 9) | 0) + 1; r < ((a / 9) | 0); r++) if (st.b[r * 9 + (a % 9)]) return false;
+    return true;
+  }
+
+  // ===== 컴퓨터 =====
+  function evalSt(st) {
+    var b = st.b, s = 0, i, p, ty, v, r, c, adv;
+    for (i = 0; i < 90; i++) {
+      p = b[i]; if (!p) continue;
+      ty = p > 0 ? p : -p; v = VAL[ty]; r = (i / 9) | 0; c = i % 9;
+      if (ty === 1) { adv = p > 0 ? 6 - r : r - 3; if (adv > 0) v += adv * 14; }
+      else if (ty === 3 || ty === 5 || ty === 4) v += 6 - (c > 4 ? c - 4 : 4 - c);
+      s += p > 0 ? v : -v;
+    }
+    return s * st.turn;
+  }
+  function kingCapturable(st) {
+    var k = generalAt(st.b, -st.turn), ms, i;
+    if (k < 0) return true;
+    ms = gen(st);
+    for (i = 0; i < ms.length; i++) if (ms[i].t === k) return true;
+    return false;
+  }
+  function order(st, ms) {
+    var b = st.b, i, v, a;
+    for (i = 0; i < ms.length; i++) {
+      v = b[ms[i].t]; if (v < 0) v = -v;
+      a = b[ms[i].f]; if (a < 0) a = -a;
+      ms[i].s = v ? VAL[v] * 10 - VAL[a] : 0;
+    }
+    ms.sort(function (x, y) { return y.s - x.s; });
+  }
+  function negamax(st, depth, alpha, beta) {
+    if (depth === 0) return kingCapturable(st) ? 20000 : evalSt(st);
+    var ms = gen(st), i, best = -1e9, v, ns, tv;
+    order(st, ms);
+    for (i = 0; i < ms.length; i++) {
+      tv = st.b[ms[i].t];
+      if (tv === 7 || tv === -7) return 20000 + depth;
+      ns = make(st, ms[i]);
+      v = -negamax(ns, depth - 1, -beta, -alpha);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best === -1e9 ? 0 : best;
+  }
+  function think(st, depth) {
+    var ms = legal(st), i, v, ns, best = -1e9, bm = null, noise = depth === 1 ? 90 : 6;
+    order(st, ms);
+    for (i = 0; i < ms.length; i++) {
+      ns = make(st, ms[i]);
+      // 빅장(무승부)은 불리할 때만 택하도록 비등한 점수보다 조금 낮게 본다
+      v = bikjang(ns) ? -150 : -negamax(ns, depth - 1, -1e9, 1e9);
+      v += Math.random() * noise * 2 - noise;
+      if (v > best) { best = v; bm = ms[i]; }
+    }
+    return bm;
+  }
+
+  // ===== 게임 진행 =====
+  var me = 1, cur, hist, sel = -1, targets = [], over = false, busy = false, last = null, legalNow = [];
+  var anim = null, animBusy = false, banner = null, gid = 0, noteLines = [];
+  var rec = { w: 0, l: 0, d: 0 };
+  try { var r0 = JSON.parse(localStorage.getItem('janggiRec') || 'null'); if (r0) rec = r0; } catch (e) {}
+  function saveRec() { try { localStorage.setItem('janggiRec', JSON.stringify(rec)); } catch (e) {} }
+  function showRec() { $('w').textContent = rec.w; $('l').textContent = rec.l; $('d').textContent = rec.d; }
+  function say(t, color) { $('msg').textContent = t; $('msg').style.color = color || '#333'; }
+  function key(st) { return st.b.join(',') + '|' + st.turn; }
+  function sqName(i) { return String.fromCharCode(97 + (i % 9)) + (10 - ((i / 9) | 0)); }
+  function addNote(title, text) { noteLines.push('<p><b>' + title + '</b> ' + text + '</p>'); }
+  function showNotes() {
+    var el = $('note');
+    if (!noteLines.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.innerHTML = noteLines.join(''); el.style.display = 'block';
+  }
+  var HINT = [null,
+    '졸·병은 앞이나 옆으로 한 칸만 가요. 뒤로는 못 가요. 상대 궁성 안에서는 대각선 선을 따라 앞으로도 갈 수 있어요.',
+    '상은 한 칸 곧게 간 뒤 대각선으로 두 칸 가요. 가는 길에 기물이 하나라도 있으면 못 가요.',
+    '마는 한 칸 곧게 간 뒤 대각선으로 한 칸 가요. 곧게 가는 첫 칸에 기물이 있으면 못 가요.',
+    '차는 직선으로 막힐 때까지 얼마든지 가요. 궁성 안에서는 대각선 선도 따라갈 수 있어요.',
+    '포는 기물 하나를 뛰어넘어야만 움직이고 잡을 수 있어요. 포끼리는 뛰어넘을 수도, 잡을 수도 없어요.',
+    '사는 궁성 안에서만 한 칸씩 움직여요(대각선 선 포함).',
+    '장(초/한)은 궁성 안에서만 한 칸씩 움직여요. 장군을 피할 수 없으면(외통수) 져요.'];
+  var MATE = '장군을 피하거나 막거나 공격한 기물을 잡을 방법이 하나도 없어서 게임이 끝났어요.';
+  function finish(kind, nt, nx) {
+    over = true; sel = -1; targets = [];
+    if (kind === 'win') { rec.w++; say('외통수! 내가 이겼어요!', '#2a9d4b'); SFX.play('tetris'); banner = { text: '외통수!', until: 0 }; }
+    else if (kind === 'lose') { rec.l++; say('외통수! 컴퓨터가 이겼어요', '#e5484d'); SFX.play('over'); banner = { text: '외통수!', until: 0 }; }
+    else { rec.d++; say(kind, '#888'); }
+    if (nt) addNote(nt, nx);
+    saveRec(); showRec(); showNotes(); draw();
+  }
+  function passTurn(auto) {
+    var mine = cur.turn === me, who = mine ? '내가' : '컴퓨터가';
+    noteLines = []; addNote(who + ' 한 수 쉼', auto ? '둘 수 있는 수가 없어서(장군은 아님) 자동으로 한 번 쉬었어요.' : '장군이 아닐 때는 한 수를 쉴 수 있어요.');
+    $('mv').textContent = who + ' 한 수 쉼'; $('mv').style.color = '#555'; $('mv').style.fontWeight = 'normal';
+    cur = passState(cur); hist.push({ st: cur, mv: null }); last = null; sel = -1; targets = [];
+    SFX.play('move'); afterMove();
+  }
+  function afterMove() {
+    legalNow = legal(cur);
+    var chk = inCheck(cur), n = 0, i, k;
+    if (bikjang(cur)) { finish('빅장 - 무승부', '빅장', '두 장이 같은 줄에서 사이에 기물 없이 마주 보면 빅장이에요. 이 게임에서는 무승부로 끝나요.'); return; }
+    if (cur.pass >= 2) { finish('연속으로 쉬어서 무승부', '무승부', '양쪽이 연달아 쉬면 더 둘 수 없다고 보고 무승부로 끝나요.'); return; }
+    if (!legalNow.length) {
+      if (chk) { finish(cur.turn === me ? 'lose' : 'win', '외통수', MATE); return; }
+      passTurn(true); return;
+    }
+    k = key(cur);
+    for (i = 0; i < hist.length; i++) if (key(hist[i].st) === k) n++;
+    if (cur.half >= 200) { finish('오래 진행 - 무승부', '무승부', '200수 동안 기물을 잡지 못하면 무승부로 끝나요.'); return; }
+    if (n >= 3) { finish('같은 모양 3번 - 무승부', '3번 반복', '똑같은 판 모양이 세 번 나오면 무승부예요.'); return; }
+    if (chk) {
+      SFX.play('item'); banner = { text: '장군!', until: Date.now() + 1300 }; setTimeout(draw, 1400);
+      addNote((cur.turn === me ? '내 장이' : '컴퓨터 장이') + ' 장군', '장이 공격받고 있어요(소리는 올라가는 멜로디). 장을 피하거나(멍군), 길을 막거나, 공격한 기물을 잡아야 해요.');
+    }
+    showNotes();
+    if (cur.turn === me) { say(chk ? '장군! 내 차례' : '내 차례'); draw(); }
+    else { say(chk ? '장군! 컴퓨터 생각 중...' : '컴퓨터 생각 중...', '#888'); draw(); aiTurn(); }
+  }
+  function startAnim(a, done) {
+    var g = gid; a.t0 = Date.now(); a.slide = 420; a.flash = a.v ? 320 : 0; a.arrived = false;
+    anim = a; animBusy = true;
+    (function step() {
+      if (g !== gid) return;
+      var el = Date.now() - a.t0;
+      if (!a.arrived && el >= a.slide) { a.arrived = true; SFX.play(a.snd); }
+      if (el >= a.slide + a.flash) { anim = null; animBusy = false; draw(); done(); return; }
+      draw(); setTimeout(step, 16);
+    })();
+  }
+  function doMove(m) {
+    var g = gid, p = cur.b[m.f], ty = p > 0 ? p : -p, v = cur.b[m.t], mine = cur.turn === me;
+    noteLines = [];
+    var txt = (mine ? '내 ' : '컴퓨터 ') + NAMES[ty] + ' ' + sqName(m.f) + ' → ' + sqName(m.t), mv = $('mv');
+    if (v) { txt += ' · ' + (mine ? '컴퓨터의 ' : '내 ') + NAMES[v > 0 ? v : -v] + ' 잡음!'; mv.style.color = '#e5484d'; mv.style.fontWeight = 'bold'; }
+    else { mv.style.color = '#555'; mv.style.fontWeight = 'normal'; }
+    mv.textContent = txt;
+    cur = make(cur, m); hist.push({ st: cur, mv: m }); last = m; sel = -1; targets = [];
+    startAnim({ f: m.f, t: m.t, p: p, v: v, snd: v ? 'hit' : 'move' }, function () { if (g === gid) afterMove(); });
+  }
+  function aiTurn() {
+    busy = true;
+    var g = gid;
+    setTimeout(function () {
+      if (g !== gid) return;
+      var m = think(cur, parseInt($('lvl').value, 10));
+      busy = false;
+      if (m) doMove(m);
+    }, 80);
+  }
+  function newGame() {
+    me = parseInt($('side').value, 10);
+    gid++; anim = null; animBusy = false; banner = null; $('mv').textContent = '';
+    cur = startState(parseInt($('setup').value, 10)); hist = [{ st: cur, mv: null }]; sel = -1; targets = []; over = false; busy = false; last = null;
+    legalNow = legal(cur); draw(); noteLines = []; showNotes();
+    if (cur.turn === me) say('내 차례'); else { say('컴퓨터 생각 중...', '#888'); aiTurn(); }
+  }
+  function undo() {
+    if (over || busy || animBusy) return;
+    for (var j = hist.length - 2; j >= 0; j--) if (hist[j].st.turn === me) {
+      banner = null; $('mv').textContent = '';
+      hist.length = j + 1; cur = hist[j].st; last = hist[j].mv; sel = -1; targets = [];
+      legalNow = legal(cur); noteLines = []; showNotes(); say('내 차례'); draw(); return;
+    }
+  }
+  function tap(cx, cy) {
+    if (over || busy || animBusy || cur.turn !== me) return;
+    var rc = cv.getBoundingClientRect(), x = (cx - rc.left) / rc.width * W, y = (cy - rc.top) / rc.height * H;
+    var col = Math.round((x - M) / CW), row = Math.round((y - M) / CW), i;
+    if (me === -1) { col = 8 - col; row = 9 - row; }
+    if (col < 0 || col > 8 || row < 0 || row > 9) return;
+    var sq = row * 9 + col;
+    if (sel >= 0) {
+      for (i = 0; i < legalNow.length; i++) if (legalNow[i].f === sel && legalNow[i].t === sq) { doMove(legalNow[i]); return; }
+    }
+    if (cur.b[sq] * me > 0) {
+      sel = sq; targets = [];
+      for (i = 0; i < legalNow.length; i++) if (legalNow[i].f === sel) targets.push(legalNow[i].t);
+      var ty = cur.b[sq] > 0 ? cur.b[sq] : -cur.b[sq];
+      noteLines = []; addNote('힌트 · ' + NAMES[ty], HINT[ty] + (targets.length ? '' : ' (지금은 갈 수 있는 곳이 없어요.)')); showNotes();
+    } else { sel = -1; targets = []; }
+    draw();
+  }
+  function doPassBtn() {
+    if (over || busy || animBusy || cur.turn !== me) return;
+    if (inCheck(cur)) { noteLines = []; addNote('한 수 쉼 불가', '장군을 받는 중에는 쉴 수 없어요. 장을 지켜야 해요.'); showNotes(); return; }
+    passTurn(false);
+  }
+
+  // ===== 그리기 =====
+  var LABEL_KO = ['', ['졸', '병'], '상', '마', '차', '포', '사', ['초', '한']];
+  var LABEL_HJ = ['', ['卒', '兵'], '象', '馬', '車', '包', '士', ['楚', '漢']];
+  var useHanja = true;
+  try { if (localStorage.getItem('janggiGlyph') === '0') useHanja = false; } catch (e) {}
+  var RAD = [0, 16, 19, 19, 21, 21, 19, 23];
+  function pos(sq) { var r = (sq / 9) | 0, c = sq % 9; if (me === -1) { r = 9 - r; c = 8 - c; } return [M + c * CW, M + r * CW]; }
+  function chip(ty, side, cx, cy, sc) {
+    var R = RAD[ty] * (sc || 1), col = side > 0 ? '#1d7a3a' : '#c0262d', lb = (useHanja ? LABEL_HJ : LABEL_KO)[ty];
+    if (ty === 1 || ty === 7) lb = side > 0 ? lb[0] : lb[1];
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.fillStyle = '#f8ecc9'; ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, R - 4, 0, 6.2832); ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = col; ctx.font = 'bold ' + Math.round(R * 1.05) + 'px Helvetica,Arial,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(lb, cx, cy + 1);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  }
+  function line(r1, c1, r2, c2) {
+    var a = pos(r1 * 9 + c1), b = pos(r2 * 9 + c2);
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+  }
+  function draw() {
+    var i, p, q, ty, pc;
+    ctx.fillStyle = '#e8c277'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#6b4a1e'; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (i = 0; i < 10; i++) line(i, 0, i, 8);
+    for (i = 0; i < 9; i++) line(0, i, 9, i);
+    line(0, 3, 2, 5); line(0, 5, 2, 3); line(7, 3, 9, 5); line(7, 5, 9, 3);
+    ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeRect(M - 4, M - 4, 8 * CW + 8, 9 * CW + 8);
+    ctx.font = 'bold 11px Helvetica,Arial,sans-serif'; ctx.fillStyle = '#6b4a1e';
+    for (i = 0; i < 9; i++) { p = pos(i); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillText(String.fromCharCode(97 + i), p[0], H - 6); }
+    for (i = 0; i < 10; i++) { p = pos(i * 9); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(10 - i), 11, p[1]); }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    if (last) {
+      ctx.fillStyle = 'rgba(255,225,60,.55)';
+      p = pos(last.f); ctx.beginPath(); ctx.arc(p[0], p[1], 25, 0, 6.2832); ctx.fill();
+      p = pos(last.t); ctx.beginPath(); ctx.arc(p[0], p[1], 25, 0, 6.2832); ctx.fill();
+    }
+    if (cur && !over && inCheck(cur)) {
+      p = pos(generalAt(cur.b, cur.turn)); ctx.fillStyle = 'rgba(229,72,77,.6)'; ctx.beginPath(); ctx.arc(p[0], p[1], 28, 0, 6.2832); ctx.fill();
+    }
+    if (sel >= 0) { p = pos(sel); ctx.fillStyle = 'rgba(70,150,255,.6)'; ctx.beginPath(); ctx.arc(p[0], p[1], 27, 0, 6.2832); ctx.fill(); }
+    var an = anim, el = an ? Date.now() - an.t0 : 0, sliding = !!an && el < an.slide, u, e2, a0, a1, vt;
+    for (i = 0; i < 90; i++) {
+      pc = cur.b[i]; if (!pc) continue;
+      if (sliding && i === an.t) continue;
+      p = pos(i); ty = pc > 0 ? pc : -pc;
+      chip(ty, pc > 0 ? 1 : -1, p[0], p[1]);
+    }
+    if (an) {
+      if (sliding) {
+        if (an.v) { p = pos(an.t); vt = an.v > 0 ? an.v : -an.v; chip(vt, an.v > 0 ? 1 : -1, p[0], p[1]); }
+        u = el / an.slide; e2 = u * u * (3 - 2 * u); a0 = pos(an.f); a1 = pos(an.t);
+        ty = an.p > 0 ? an.p : -an.p;
+        chip(ty, an.p > 0 ? 1 : -1, a0[0] + (a1[0] - a0[0]) * e2, a0[1] + (a1[1] - a0[1]) * e2);
+      } else if (an.v) {
+        u = Math.min(1, (el - an.slide) / an.flash); p = pos(an.t); vt = an.v > 0 ? an.v : -an.v;
+        ctx.fillStyle = 'rgba(229,72,77,' + (0.55 * (1 - u)) + ')'; ctx.beginPath(); ctx.arc(p[0], p[1], 27, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 1 - u; chip(vt, an.v > 0 ? 1 : -1, p[0], p[1], 1 + 0.7 * u); ctx.globalAlpha = 1;
+        ctx.strokeStyle = 'rgba(229,72,77,' + (1 - u) + ')'; ctx.lineWidth = 5; ctx.beginPath();
+        ctx.arc(p[0], p[1], CW * (0.25 + 0.6 * u), 0, 6.2832); ctx.stroke();
+      }
+    }
+    for (i = 0; i < targets.length; i++) {
+      p = pos(targets[i]); ctx.beginPath();
+      if (cur.b[targets[i]]) { ctx.strokeStyle = 'rgba(40,160,70,.95)'; ctx.lineWidth = 4; ctx.arc(p[0], p[1], 26, 0, 6.2832); ctx.stroke(); }
+      else { ctx.fillStyle = 'rgba(40,160,70,.85)'; ctx.arc(p[0], p[1], 8, 0, 6.2832); ctx.fill(); }
+    }
+    if (banner && (!banner.until || Date.now() < banner.until)) {
+      ctx.font = 'bold 46px Helvetica,Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      var tw = ctx.measureText(banner.text).width + 48;
+      ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(W / 2 - tw / 2, H / 2 - 42, tw, 84);
+      ctx.fillStyle = '#ff6b6b'; ctx.fillText(banner.text, W / 2, H / 2 + 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    }
+  }
+
+  function layout() {
+    var s = Math.min(window.innerWidth - 16, (window.innerHeight - 380) * W / H, 700);
+    if (s < 280) s = 280;
+    cv.style.width = s + 'px'; cv.style.height = (s * H / W) + 'px';
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+  layout();
+  cv.addEventListener('touchend', function (e) { e.preventDefault(); var t = e.changedTouches[0]; tap(t.clientX, t.clientY); }, false);
+  cv.addEventListener('click', function (e) { tap(e.clientX, e.clientY); }, false);
+  cv.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
+  $('go').onclick = newGame; $('undo').onclick = undo; $('pass').onclick = doPassBtn;
+  $('side').onchange = newGame; $('setup').onchange = newGame;
+  $('glyph').value = useHanja ? '1' : '0';
+  $('glyph').onchange = function () {
+    useHanja = $('glyph').value === '1';
+    try { localStorage.setItem('janggiGlyph', useHanja ? '1' : '0'); } catch (e) {}
+    draw();
+  };
+  showRec(); newGame();
+})();
+</script>
+<script src="sound.js?v=24"></script>
+<script>SFX.attachBgm();</script>
+</body>
+</html>
