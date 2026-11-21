@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>15퍼즐</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; }
+  #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
+  #g { width: 328px; margin: 0 auto; }
+  .t { float: left; width: 74px; height: 74px; margin: 4px; border-radius: 10px; background: #2f6fed; color: #fff; text-align: center; line-height: 74px; font-size: 32px; font-weight: bold; }
+  .t.e { background: transparent; }
+  .clr { clear: both; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 15퍼즐</div>
+<div class="wrap">
+  <div id="info">이동 <b id="mv">0</b> · 최고 <b id="best">-</b></div>
+  <div id="g"></div><div class="clr"></div>
+  <div id="msg"></div>
+  <div style="text-align:center"><button class="btn" id="re">섞기</button></div>
+  <p style="text-align:center;color:#888">빈칸 옆의 숫자를 탭해서 1~15 순서로 맞추세요</p>
+</div>
+<script>
+(function () {
+  var N = 4, t, mv, done, best = 0;
+  try { best = parseInt(localStorage.getItem('bestSlide') || '0', 10) || 0; } catch (e) {}
+  function $(i) { return document.getElementById(i); }
+  function neighbors(p) {
+    var r = Math.floor(p / N), c = p % N, a = [];
+    if (r > 0) a.push(p - N); if (r < N - 1) a.push(p + N); if (c > 0) a.push(p - 1); if (c < N - 1) a.push(p + 1);
+    return a;
+  }
+  function init() {
+    t = []; for (var i = 1; i < N * N; i++) t.push(i); t.push(0);
+    var e = N * N - 1, prev = -1;
+    for (var k = 0; k < 200; k++) { // 유효한 이동만 반복해서 섞어서 항상 풀 수 있음
+      var nb = neighbors(e), p;
+      do { p = nb[Math.floor(Math.random() * nb.length)]; } while (p === prev && nb.length > 1);
+      t[e] = t[p]; t[p] = 0; prev = e; e = p;
+    }
+    mv = 0; done = false; $('msg').textContent = ''; draw();
+  }
+  function solved() { for (var i = 0; i < N * N - 1; i++) if (t[i] !== i + 1) return false; return true; }
+  function draw() {
+    var h = '';
+    for (var i = 0; i < N * N; i++) h += '<div class="t' + (t[i] ? '' : ' e') + '" data-i="' + i + '">' + (t[i] ? t[i] : '') + '</div>';
+    $('g').innerHTML = h;
+    var cs = $('g').childNodes;
+    for (var k = 0; k < cs.length; k++) cs[k].onclick = function () { tap(parseInt(this.getAttribute('data-i'), 10)); };
+    $('mv').textContent = mv; $('best').textContent = best ? best : '-';
+  }
+  function tap(p) {
+    if (done || !t[p]) return;
+    var nb = neighbors(p);
+    for (var i = 0; i < nb.length; i++) if (t[nb[i]] === 0) {
+      t[nb[i]] = t[p]; t[p] = 0; mv++;
+      if (solved()) {
+        done = true; $('msg').textContent = '🎉 완성! ' + mv + '번 이동';
+        if (!best || mv < best) { best = mv; try { localStorage.setItem('bestSlide', best); } catch (e) {} }
+      }
+      draw(); return;
+    }
+  }
+  $('re').onclick = init;
+  init();
+})();
+</script>
+</body>
+</html>

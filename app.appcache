@@ -1,9 +1,15 @@
 CACHE MANIFEST
-# v1 2026-11-21
+# v2 2026-11-21
+
 index.html
 memo.html
 2048.html
 mines.html
+snake.html
+tictactoe.html
+memory.html
+mole.html
+slide.html
 style.css
 
 NETWORK:

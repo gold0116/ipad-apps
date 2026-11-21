@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>틱택토</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; }
+  #info { text-align: center; font-size: 18px; margin: 4px 0 10px; }
+  #b { width: 306px; margin: 0 auto; }
+  .c { float: left; width: 96px; height: 96px; margin: 3px; background: #fff; border-radius: 10px; text-align: center; line-height: 96px; font-size: 56px; font-weight: bold; }
+  .c.x { color: #2f6fed; } .c.o { color: #e5484d; }
+  .clr { clear: both; }
+  #msg { text-align: center; font-size: 24px; font-weight: bold; height: 34px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 틱택토</div>
+<div class="wrap">
+  <div id="info">나 ❌ vs 컴퓨터 ⭕ · 전적 <span id="rec">0승 0무 0패</span></div>
+  <div id="b"></div><div class="clr"></div>
+  <div id="msg"></div>
+  <div style="text-align:center"><button class="btn" id="re">새 판</button> <button class="btn gray" id="lv">난이도: 어려움</button></div>
+</div>
+<script>
+(function () {
+  var B, done, hard = true, w = 0, d = 0, l = 0;
+  var LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  function $(i) { return document.getElementById(i); }
+  function winner(b) {
+    for (var i = 0; i < LINES.length; i++) { var a = LINES[i]; if (b[a[0]] && b[a[0]] === b[a[1]] && b[a[1]] === b[a[2]]) return b[a[0]]; }
+    for (var j = 0; j < 9; j++) if (!b[j]) return null;
+    return 'D';
+  }
+  function minimax(b, turn) { // O = 컴퓨터(최대), X = 사람(최소)
+    var r = winner(b);
+    if (r === 'O') return 1; if (r === 'X') return -1; if (r === 'D') return 0;
+    var best = turn === 'O' ? -2 : 2;
+    for (var i = 0; i < 9; i++) if (!b[i]) {
+      b[i] = turn;
+      var v = minimax(b, turn === 'O' ? 'X' : 'O');
+      b[i] = '';
+      if (turn === 'O') { if (v > best) best = v; } else { if (v < best) best = v; }
+    }
+    return best;
+  }
+  function aiMove() {
+    var empty = [], i;
+    for (i = 0; i < 9; i++) if (!B[i]) empty.push(i);
+    if (!hard && Math.random() < 0.6) return empty[Math.floor(Math.random() * empty.length)];
+    var bestV = -2, bestI = empty[0];
+    for (i = 0; i < empty.length; i++) {
+      B[empty[i]] = 'O';
+      var v = minimax(B, 'X');
+      B[empty[i]] = '';
+      if (v > bestV) { bestV = v; bestI = empty[i]; }
+    }
+    return bestI;
+  }
+  function draw() {
+    var h = '';
+    for (var i = 0; i < 9; i++) h += '<div class="c ' + (B[i] ? B[i].toLowerCase() : '') + '" data-i="' + i + '">' + (B[i] === 'X' ? '✕' : B[i] === 'O' ? '○' : '') + '</div>';
+    $('b').innerHTML = h;
+    var cs = $('b').childNodes;
+    for (var k = 0; k < cs.length; k++) cs[k].onclick = function () { tap(parseInt(this.getAttribute('data-i'), 10)); };
+  }
+  function finish() {
+    var r = winner(B);
+    if (!r) return false;
+    done = true;
+    if (r === 'X') { w++; $('msg').textContent = '🎉 이겼어요!'; }
+    else if (r === 'O') { l++; $('msg').textContent = '😢 졌어요'; }
+    else { d++; $('msg').textContent = '🤝 비겼어요'; }
+    $('rec').textContent = w + '승 ' + d + '무 ' + l + '패';
+    return true;
+  }
+  function tap(i) {
+    if (done || B[i]) return;
+    B[i] = 'X';
+    if (!finish()) { B[aiMove()] = 'O'; finish(); }
+    draw();
+  }
+  function init() { B = ['','','','','','','','','']; done = false; $('msg').textContent = ''; draw(); }
+  $('re').onclick = init;
+  $('lv').onclick = function () { hard = !hard; this.textContent = '난이도: ' + (hard ? '어려움' : '쉬움'); init(); };
+  init();
+})();
+</script>
+</body>
+</html>

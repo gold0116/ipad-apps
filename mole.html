@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>두더지 잡기</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; }
+  #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
+  #g { width: 312px; margin: 0 auto; }
+  .h { float: left; width: 96px; height: 96px; margin: 4px; border-radius: 50%; background: #8b6b4a; text-align: center; line-height: 96px; font-size: 56px; }
+  .clr { clear: both; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 두더지 잡기</div>
+<div class="wrap">
+  <div id="info">점수 <b id="sc">0</b> · 남은 시간 <b id="tm">30</b> · 최고 <b id="best">0</b></div>
+  <div id="g"></div><div class="clr"></div>
+  <div id="msg"></div>
+  <div style="text-align:center"><button class="btn" id="go">시작</button></div>
+</div>
+<script>
+(function () {
+  var cells = [], score = 0, left = 30, active = -1, running = false, best = 0, tT = null, mT = null, hide = null;
+  try { best = parseInt(localStorage.getItem('bestMole') || '0', 10) || 0; } catch (e) {}
+  function $(i) { return document.getElementById(i); }
+  var g = $('g');
+  for (var i = 0; i < 9; i++) {
+    (function (idx) {
+      var d = document.createElement('div'); d.className = 'h';
+      d.onclick = function () { hit(idx); };
+      g.appendChild(d); cells.push(d);
+    })(i);
+  }
+  function show() {
+    $('sc').textContent = score; $('tm').textContent = left; $('best').textContent = best;
+    for (var i = 0; i < 9; i++) cells[i].textContent = (i === active) ? '🐹' : '';
+  }
+  function hit(i) {
+    if (!running || i !== active) return;
+    score++; active = -1; show();
+  }
+  function pop() {
+    if (!running) return;
+    active = Math.floor(Math.random() * 9); show();
+    var ms = Math.max(450, 900 - score * 15);
+    clearTimeout(hide);
+    hide = setTimeout(function () { active = -1; show(); }, ms - 100);
+    mT = setTimeout(pop, ms);
+  }
+  function start() {
+    clearInterval(tT); clearTimeout(mT); clearTimeout(hide);
+    score = 0; left = 30; active = -1; running = true; $('msg').textContent = ''; show();
+    tT = setInterval(function () {
+      left--;
+      if (left <= 0) {
+        running = false; active = -1; clearInterval(tT); clearTimeout(mT); clearTimeout(hide);
+        if (score > best) { best = score; try { localStorage.setItem('bestMole', best); } catch (e) {} }
+        $('msg').textContent = '끝! 점수 ' + score;
+      }
+      show();
+    }, 1000);
+    pop();
+  }
+  $('go').onclick = start;
+  show();
+})();
+</script>
+</body>
+</html>

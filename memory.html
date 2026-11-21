@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>짝맞추기</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; }
+  #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
+  #g { width: 328px; margin: 0 auto; }
+  .k { float: left; width: 74px; height: 74px; margin: 4px; border-radius: 10px; background: #2f6fed; color: #fff; text-align: center; line-height: 74px; font-size: 38px; }
+  .k.up { background: #fff; }
+  .k.ok { background: #d6f5dc; }
+  .clr { clear: both; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 짝맞추기</div>
+<div class="wrap">
+  <div id="info">시도 <b id="tr">0</b> · 최고 <b id="best">-</b></div>
+  <div id="g"></div><div class="clr"></div>
+  <div id="msg"></div>
+  <div style="text-align:center"><button class="btn" id="re">새 게임</button></div>
+</div>
+<script>
+(function () {
+  var EM = ['🐶','🐱','🐭','🐹','🐰','🐻','🐼','🐨'];
+  var cards, first, lock, tries, pairs, best = 0;
+  try { best = parseInt(localStorage.getItem('bestMemory') || '0', 10) || 0; } catch (e) {}
+  function $(i) { return document.getElementById(i); }
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function init() {
+    var v = EM.concat(EM); shuffle(v); cards = [];
+    for (var i = 0; i < 16; i++) cards.push({ v: v[i], up: false, ok: false });
+    first = -1; lock = false; tries = 0; pairs = 0; $('msg').textContent = ''; draw();
+  }
+  function draw() {
+    var h = '';
+    for (var i = 0; i < 16; i++) {
+      var c = cards[i];
+      h += '<div class="k' + (c.up || c.ok ? ' up' : '') + (c.ok ? ' ok' : '') + '" data-i="' + i + '">' + (c.up || c.ok ? c.v : '?') + '</div>';
+    }
+    $('g').innerHTML = h;
+    var cs = $('g').childNodes;
+    for (var k = 0; k < cs.length; k++) cs[k].onclick = function () { tap(parseInt(this.getAttribute('data-i'), 10)); };
+    $('tr').textContent = tries; $('best').textContent = best ? best : '-';
+  }
+  function tap(i) {
+    var c = cards[i];
+    if (lock || c.up || c.ok) return;
+    c.up = true;
+    if (first < 0) { first = i; draw(); return; }
+    tries++;
+    var a = cards[first];
+    if (a.v === c.v) {
+      a.ok = c.ok = true; a.up = c.up = false; first = -1; pairs++;
+      if (pairs === 8) {
+        $('msg').textContent = '🎉 완성! ' + tries + '번 만에';
+        if (!best || tries < best) { best = tries; try { localStorage.setItem('bestMemory', best); } catch (e) {} }
+      }
+      draw();
+    } else {
+      lock = true; draw();
+      var f = first;
+      setTimeout(function () { cards[f].up = false; cards[i].up = false; first = -1; lock = false; draw(); }, 800);
+    }
+  }
+  $('re').onclick = init;
+  init();
+})();
+</script>
+</body>
+</html>
