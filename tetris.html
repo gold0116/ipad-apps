@@ -32,6 +32,7 @@
       <div class="lb">최고</div><div class="v" id="best">0</div>
       <button class="btn gray" id="pause" style="width:100%;margin:10px 0 0;padding:10px 0;font-size:15px">일시정지</button>
       <button class="btn red" id="new" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">새 게임</button>
+      <button class="btn gray" id="mus" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">배경음 켜짐</button>
     </div>
   </div>
   <div class="pad">
@@ -98,6 +99,7 @@
   function reset() {
     board = emptyBoard(); bag = []; score = 0; lines = 0; level = 1; dropMs = 800;
     nextId = nextFromBag(); spawn(); state = 'run'; schedule(); updateInfo(); draw();
+    SFX.setTempo(1); SFX.musicStart(true);
   }
   function schedule() { clearInterval(timer); timer = setInterval(tick, dropMs); }
   function tick() { if (state === 'run') softStep(); }
@@ -138,13 +140,13 @@
       score += [0, 100, 300, 500, 800][cleared] * level; lines += cleared;
       SFX.play(cleared === 4 ? 'tetris' : 'line');
       var nl = Math.floor(lines / 10) + 1;
-      if (nl !== level) { level = nl; dropMs = Math.max(90, 800 - (level - 1) * 70); schedule(); }
+      if (nl !== level) { level = nl; dropMs = Math.max(90, 800 - (level - 1) * 70); schedule(); SFX.setTempo(Math.min(1.7, 1 + (level - 1) * 0.07)); }
     }
     updateInfo();
     spawn(); draw();
   }
   function gameOver() {
-    state = 'over'; clearInterval(timer); SFX.play('over');
+    state = 'over'; clearInterval(timer); SFX.musicStop(true); SFX.play('over');
     if (score > best) { best = score; try { localStorage.setItem('bestTetris', best); } catch (e) {} }
     updateInfo(); draw();
   }
@@ -209,9 +211,12 @@
   }
   press('new', function () { reset(); });
   press('pause', function () {
-    if (state === 'run') { state = 'pause'; clearInterval(timer); $('pause').textContent = '계속'; draw(); }
-    else if (state === 'pause') { state = 'run'; schedule(); $('pause').textContent = '일시정지'; draw(); }
+    if (state === 'run') { state = 'pause'; clearInterval(timer); SFX.musicStop(false); $('pause').textContent = '계속'; draw(); }
+    else if (state === 'pause') { state = 'run'; schedule(); SFX.musicStart(false); $('pause').textContent = '일시정지'; draw(); }
   });
+  function musLabel() { $('mus').textContent = SFX.isMusicMuted() ? '배경음 꺼짐' : '배경음 켜짐'; }
+  press('mus', function () { SFX.setMusicMuted(!SFX.isMusicMuted()); musLabel(); });
+  musLabel();
   document.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
   document.addEventListener('keydown', function (e) {
     var k = e.keyCode;
