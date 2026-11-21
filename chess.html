@@ -13,6 +13,7 @@
   #msg { text-align: center; font-size: 22px; font-weight: bold; color: #333; height: 28px; margin-top: 6px; }
   .row { text-align: center; margin: 6px 0; }
   select { font-size: 18px; }
+  #mv { text-align: center; font-size: 17px; min-height: 22px; margin-top: 4px; color: #555; }
   #note { display: none; margin: 8px auto 0; max-width: 560px; padding: 8px 12px; background: #fff8e1; border: 1px solid #f0d58a; border-radius: 8px; font-size: 15px; line-height: 1.5; color: #444; }
   #note b { color: #8a5a00; }
   #note p { margin: 0 0 4px; }
@@ -32,8 +33,10 @@
   <div id="info">전적 <b id="w">0</b>승 <b id="l">0</b>패 <b id="d">0</b>무</div>
   <canvas id="cv" width="480" height="480"></canvas>
   <div id="msg"></div>
+  <div id="mv"></div>
   <div id="note"></div>
   <p style="text-align:center;color:#888">내 기물을 누르면 갈 수 있는 곳이 표시됩니다. 폰은 끝에 닿으면 퀸이 됩니다.</p>
+  <p style="text-align:center;color:#888;font-size:14px;line-height:1.5">소리 안내: 짧은 "뚝" = 그냥 이동 · 낮은 "쿵" + 붉은 번쩍임 = 기물을 잡음 · 올라가는 멜로디 + "체크!" 표시 = 킹이 공격받는 중 · 높은 "띠링" = 폰이 퀸으로 승급 · 팡파르 = 내 승리 · 내려가는 소리 = 내 패배</p>
 </div>
 <script>
 (function () {
@@ -247,10 +250,13 @@
     if (!noteLines.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
     el.innerHTML = noteLines.join(''); el.style.display = 'block';
   }
+  var PN = ['', '폰', '나이트', '비숍', '룩', '퀸', '킹'];
+  function sqName(i) { return String.fromCharCode(97 + (i & 7)) + (8 - (i >> 3)); }
+  var anim = null, animBusy = false, banner = null, gid = 0;
   function finish(kind, nt, nx) {
     over = true; sel = -1; targets = [];
-    if (kind === 'win') { rec.w++; say('체크메이트! 승리!', '#2a9d4b'); SFX.play('tetris'); }
-    else if (kind === 'lose') { rec.l++; say('체크메이트. 컴퓨터 승리', '#e5484d'); SFX.play('over'); }
+    if (kind === 'win') { rec.w++; say('체크메이트! 내가 이겼어요!', '#2a9d4b'); SFX.play('tetris'); banner = { text: '체크메이트!', until: 0 }; }
+    else if (kind === 'lose') { rec.l++; say('체크메이트! 컴퓨터가 이겼어요', '#e5484d'); SFX.play('over'); banner = { text: '체크메이트!', until: 0 }; }
     else { rec.d++; say(kind, '#888'); }
     if (nt) addNote(nt, nx);
     saveRec(); showRec(); showNotes(); draw();
@@ -269,23 +275,43 @@
     if (insufficient(cur)) { finish('기물 부족 - 무승부', '기물 부족', '남은 기물로는 어떻게 해도 체크메이트를 만들 수 없어서 무승부예요.'); return; }
     if (cur.half >= 100) { finish('50수 규칙 - 무승부', '50수 규칙', '양쪽이 50수 동안 폰을 움직이지도, 기물을 잡지도 않으면 무승부예요.'); return; }
     if (n >= 3) { finish('같은 모양 3번 - 무승부', '3번 반복', '똑같은 판 모양이 세 번 나오면 무승부예요.'); return; }
-    if (chk) { SFX.play('item'); addNote('체크', '킹이 공격받고 있어요. 킹을 피하거나, 길을 막거나, 공격한 기물을 잡아야 해요.'); }
+    if (chk) {
+      SFX.play('item'); banner = { text: '체크!', until: Date.now() + 1300 }; setTimeout(draw, 1400);
+      addNote((cur.turn === me ? '내 킹이' : '컴퓨터 킹이') + ' 체크', '킹이 공격받고 있어요(소리는 올라가는 멜로디). 킹을 피하거나, 길을 막거나, 공격한 기물을 잡아야 해요.');
+    }
     showNotes();
     if (cur.turn === me) { say(chk ? '체크! 내 차례' : '내 차례'); draw(); }
     else { say(chk ? '체크! 컴퓨터 생각 중...' : '컴퓨터 생각 중...', '#888'); draw(); aiTurn(); }
   }
+  function startAnim(a, done) {
+    var g = gid; a.t0 = Date.now(); a.slide = 420; a.flash = a.v ? 320 : 0; a.arrived = false;
+    anim = a; animBusy = true;
+    (function step() {
+      if (g !== gid) return;
+      var el = Date.now() - a.t0;
+      if (!a.arrived && el >= a.slide) { a.arrived = true; SFX.play(a.snd); }
+      if (el >= a.slide + a.flash) { anim = null; animBusy = false; draw(); done(); return; }
+      draw(); setTimeout(step, 16);
+    })();
+  }
   function doMove(m) {
-    var cap = cur.b[m.t] !== 0 || (m.t === cur.ep && (cur.b[m.f] === 1 || cur.b[m.f] === -1) && (m.f & 7) !== (m.t & 7));
-    var kind = specialKind(cur, m), who = cur.turn === me ? '내가' : '컴퓨터가';
+    var g = gid, p = cur.b[m.f], ty = p > 0 ? p : -p, vsq = m.t, v = cur.b[m.t];
+    if (!v && ty === 1 && m.t === cur.ep && (m.f & 7) !== (m.t & 7)) { vsq = m.t + (p > 0 ? 8 : -8); v = cur.b[vsq]; }
+    var kind = specialKind(cur, m), mine = cur.turn === me, who = mine ? '내가' : '컴퓨터가';
     noteLines = [];
     if (kind) addNote(who + ' ' + TXT[kind][0], TXT[kind][1]);
+    var txt = (mine ? '내 ' : '컴퓨터 ') + PN[ty] + ' ' + sqName(m.f) + ' → ' + sqName(m.t), mv = $('mv');
+    if (v) { txt += ' · ' + (mine ? '컴퓨터의 ' : '내 ') + PN[v > 0 ? v : -v] + ' 잡음!'; mv.style.color = '#e5484d'; mv.style.fontWeight = 'bold'; }
+    else { mv.style.color = '#555'; mv.style.fontWeight = 'normal'; }
+    mv.textContent = txt;
     cur = make(cur, m); hist.push({ st: cur, mv: m }); last = m; sel = -1; targets = [];
-    SFX.play(cap ? 'hit' : 'move');
-    afterMove();
+    startAnim({ f: m.f, t: m.t, p: p, v: v, vsq: vsq, snd: v ? 'hit' : (kind === 'promo' ? 'coin' : 'move') }, function () { if (g === gid) afterMove(); });
   }
   function aiTurn() {
     busy = true;
+    var g = gid;
     setTimeout(function () {
+      if (g !== gid) return;
       var m = think(cur, parseInt($('lvl').value, 10));
       busy = false;
       if (m) doMove(m);
@@ -293,19 +319,21 @@
   }
   function newGame() {
     me = parseInt($('side').value, 10);
+    gid++; anim = null; animBusy = false; banner = null; $('mv').textContent = '';
     cur = startState(); hist = [{ st: cur, mv: null }]; sel = -1; targets = []; over = false; busy = false; last = null;
     legalNow = legal(cur); draw(); noteLines = []; showNotes();
     if (cur.turn === me) say('내 차례'); else { say('컴퓨터 생각 중...', '#888'); aiTurn(); }
   }
   function undo() {
-    if (over || busy) return;
+    if (over || busy || animBusy) return;
     for (var j = hist.length - 2; j >= 0; j--) if (hist[j].st.turn === me) {
+      banner = null; $('mv').textContent = '';
       hist.length = j + 1; cur = hist[j].st; last = hist[j].mv; sel = -1; targets = [];
       legalNow = legal(cur); noteLines = []; showNotes(); say('내 차례'); draw(); return;
     }
   }
   function tap(cx, cy) {
-    if (over || busy || cur.turn !== me) return;
+    if (over || busy || animBusy || cur.turn !== me) return;
     var r = cv.getBoundingClientRect(), col = Math.floor((cx - r.left) / r.width * 8), row = Math.floor((cy - r.top) / r.height * 8);
     if (col < 0 || col > 7 || row < 0 || row > 7) return;
     if (me === -1) { col = 7 - col; row = 7 - row; }
@@ -334,20 +362,35 @@
   }
   function rect(x, y, w, h) { ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h); }
   function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); ctx.stroke(); }
-  function piece(ty, col, cx, cy) {
-    var u = CS / 48;
+  function piece(ty, col, cx, cy, sc) {
+    var u = CS / 48 * (sc || 1);
     ctx.save(); ctx.translate(cx, cy); ctx.scale(u, u);
-    ctx.fillStyle = col > 0 ? '#fafafa' : '#2a2a2a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.6;
-    var line = col > 0 ? '#000' : '#ddd';
+    ctx.fillStyle = col > 0 ? '#fafafa' : '#454545'; ctx.strokeStyle = col > 0 ? '#000' : '#f2f2f2'; ctx.lineWidth = 1.6;
+    var line = col > 0 ? '#000' : '#f2f2f2';
     if (ty === 1) {
       circ(0, -8, 6.5); poly([-7, 14, -4, 0, 4, 0, 7, 14]); rect(-11, 14, 22, 5);
     } else if (ty === 4) {
       rect(-13, 14, 26, 6); rect(-9, -7, 18, 21); rect(-13, -12, 26, 5);
       rect(-13, -19, 7, 7); rect(-3.5, -19, 7, 7); rect(6, -19, 7, 7);
     } else if (ty === 2) {
-      poly([-12, 17, -10, 5, -4, -3, -10, -7, -8, -13, -3, -17, 1, -20, 8, -14, 12, -2, 12, 17]);
-      rect(-14, 17, 28, 5);
-      ctx.fillStyle = line; ctx.beginPath(); ctx.arc(-1, -11, 1.8, 0, 6.2832); ctx.fill();
+      // 말 머리 옆모습(오른쪽을 봄): 귀, 둥근 주둥이, 눈, 입, 목 뒤 갈기
+      ctx.beginPath(); ctx.moveTo(-12, 17);
+      ctx.bezierCurveTo(-13, 8, -14, -2, -10, -10);
+      ctx.bezierCurveTo(-8, -15, -4, -19, 0, -20);
+      ctx.lineTo(4, -21); ctx.lineTo(5, -15);
+      ctx.bezierCurveTo(9, -13, 13, -9, 15, -4);
+      ctx.bezierCurveTo(16, -2, 15, 1, 12, 1);
+      ctx.bezierCurveTo(9, 1, 7, 2, 5, 2);
+      ctx.bezierCurveTo(4, 7, 9, 11, 10, 17);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      rect(-14, 18, 28, 4); rect(-11, 14, 22, 4);
+      ctx.fillStyle = line; ctx.strokeStyle = line; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(7, -8, 2, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.arc(13, -3, 1, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(7, -1); ctx.quadraticCurveTo(10, 1, 14, -0.5);
+      ctx.moveTo(-12, -4); ctx.lineTo(-8, -3); ctx.moveTo(-11, -8); ctx.lineTo(-7, -6);
+      ctx.moveTo(-9, -12); ctx.lineTo(-5, -9); ctx.moveTo(-6, -16); ctx.lineTo(-3, -12);
+      ctx.stroke();
     } else if (ty === 3) {
       poly([-8, 15, -5, -2, 5, -2, 8, 15]); rect(-12, 15, 24, 5);
       ctx.beginPath(); ctx.moveTo(0, -20); ctx.bezierCurveTo(9, -12, 8, -2, 0, -2); ctx.bezierCurveTo(-8, -2, -9, -12, 0, -20); ctx.fill(); ctx.stroke();
@@ -383,16 +426,40 @@
       ctx.fillStyle = (i & 1) ? '#b58863' : '#f0d9b5'; ctx.textAlign = 'left';
       ctx.fillText(String(ri), 3, i * CS + 2);
     }
+    var an = anim, el = an ? Date.now() - an.t0 : 0, sliding = !!an && el < an.slide, q, e2, a0, a1, vt;
     for (i = 0; i < 64; i++) {
       var pc = cur.b[i]; if (!pc) continue;
+      if (sliding && i === an.t) continue;
       p = pos(i); ty = pc > 0 ? pc : -pc;
       piece(ty, pc > 0 ? 1 : -1, p[0] + CS / 2, p[1] + CS / 2 - 1);
+    }
+    if (an) {
+      if (sliding) {
+        if (an.v) { p = pos(an.vsq); vt = an.v > 0 ? an.v : -an.v; piece(vt, an.v > 0 ? 1 : -1, p[0] + CS / 2, p[1] + CS / 2 - 1); }
+        q = el / an.slide; e2 = q * q * (3 - 2 * q); a0 = pos(an.f); a1 = pos(an.t);
+        ty = an.p > 0 ? an.p : -an.p;
+        piece(ty, an.p > 0 ? 1 : -1, a0[0] + (a1[0] - a0[0]) * e2 + CS / 2, a0[1] + (a1[1] - a0[1]) * e2 + CS / 2 - 1);
+      } else if (an.v) {
+        // 잡힌 기물: 붉게 번쩍이며 커지면서 사라짐
+        q = Math.min(1, (el - an.slide) / an.flash); p = pos(an.vsq); vt = an.v > 0 ? an.v : -an.v;
+        ctx.fillStyle = 'rgba(229,72,77,' + (0.55 * (1 - q)) + ')'; ctx.fillRect(p[0], p[1], CS, CS);
+        ctx.globalAlpha = 1 - q; piece(vt, an.v > 0 ? 1 : -1, p[0] + CS / 2, p[1] + CS / 2 - 1, 1 + 0.7 * q); ctx.globalAlpha = 1;
+        ctx.strokeStyle = 'rgba(229,72,77,' + (1 - q) + ')'; ctx.lineWidth = 5; ctx.beginPath();
+        ctx.arc(p[0] + CS / 2, p[1] + CS / 2, CS * (0.25 + 0.6 * q), 0, 6.2832); ctx.stroke();
+      }
     }
     for (i = 0; i < targets.length; i++) {
       p = pos(targets[i]);
       ctx.beginPath();
       if (cur.b[targets[i]]) { ctx.strokeStyle = 'rgba(40,160,70,.9)'; ctx.lineWidth = 4; ctx.arc(p[0] + CS / 2, p[1] + CS / 2, CS / 2 - 4, 0, 6.2832); ctx.stroke(); }
       else { ctx.fillStyle = 'rgba(40,160,70,.8)'; ctx.arc(p[0] + CS / 2, p[1] + CS / 2, 7, 0, 6.2832); ctx.fill(); }
+    }
+    if (banner && (!banner.until || Date.now() < banner.until)) {
+      ctx.font = 'bold 46px Helvetica,Arial,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      var tw = ctx.measureText(banner.text).width + 48;
+      ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(SZ / 2 - tw / 2, SZ / 2 - 42, tw, 84);
+      ctx.fillStyle = '#ff6b6b'; ctx.fillText(banner.text, SZ / 2, SZ / 2 + 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     }
   }
 
