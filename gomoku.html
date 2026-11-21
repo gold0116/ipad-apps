@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>오목</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #info { text-align: center; font-size: 18px; margin: 4px 0 8px; }
+  canvas { display: block; margin: 0 auto; border-radius: 6px; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; color: #2a9d4b; height: 28px; margin-top: 6px; }
+  .row { text-align: center; margin: 6px 0; }
+  select { font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 오목</div>
+<div class="wrap">
+  <div class="row">
+    <select id="side"><option value="1">내가 흑(먼저)</option><option value="2">내가 백(나중)</option></select>
+    <button class="btn gray" id="go">새 게임</button>
+    <button class="btn gray" id="undo">무르기</button>
+  </div>
+  <div id="info">전적 <b id="w">0</b>승 <b id="l">0</b>패 <b id="d">0</b>무</div>
+  <canvas id="cv" width="450" height="450"></canvas>
+  <div id="msg"></div>
+  <p style="text-align:center;color:#888">교차점을 눌러 돌을 놓으세요. 가로·세로·대각선으로 5개를 먼저 이으면 승리!</p>
+</div>
+<script>
+(function () {
+  function $(i) { return document.getElementById(i); }
+  var N = 15, SZ = 450, M = 18, CELL = (SZ - 2 * M) / (N - 1);
+  var cv = $('cv'), ctx = cv.getContext('2d');
+  var B, hist, me = 1, ai = 2, turn = 1, over = false, winLine = null, busy = false;
+  var rec = { w: 0, l: 0, d: 0 };
+  try { var r0 = JSON.parse(localStorage.getItem('gomokuRec') || 'null'); if (r0) rec = r0; } catch (e) {}
+  function saveRec() { try { localStorage.setItem('gomokuRec', JSON.stringify(rec)); } catch (e) {} }
+  function showRec() { $('w').textContent = rec.w; $('l').textContent = rec.l; $('d').textContent = rec.d; }
+
+  function layout() {
+    var s = Math.min(window.innerWidth - 16, window.innerHeight - 250, 700);
+    if (s < 280) s = 280;
+    cv.style.width = s + 'px'; cv.style.height = s + 'px';
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+  layout();
+
+  function px(i) { return M + i * CELL; }
+  function draw() {
+    var i, x, y;
+    ctx.fillStyle = '#e8c277'; ctx.fillRect(0, 0, SZ, SZ);
+    ctx.strokeStyle = '#6b4a1e'; ctx.lineWidth = 1; ctx.beginPath();
+    for (i = 0; i < N; i++) {
+      ctx.moveTo(px(i), px(0)); ctx.lineTo(px(i), px(N - 1));
+      ctx.moveTo(px(0), px(i)); ctx.lineTo(px(N - 1), px(i));
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#6b4a1e';
+    var st = [3, 7, 11];
+    for (x = 0; x < 3; x++) for (y = 0; y < 3; y++) { ctx.beginPath(); ctx.arc(px(st[x]), px(st[y]), 3, 0, 6.2832); ctx.fill(); }
+    for (y = 0; y < N; y++) for (x = 0; x < N; x++) if (B[y][x]) {
+      ctx.beginPath(); ctx.arc(px(x), px(y), CELL * 0.45, 0, 6.2832);
+      ctx.fillStyle = B[y][x] === 1 ? '#161616' : '#f7f7f7'; ctx.fill();
+      ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke();
+    }
+    if (hist.length) {
+      var h = hist[hist.length - 1];
+      ctx.fillStyle = '#e5484d'; ctx.beginPath(); ctx.arc(px(h.x), px(h.y), 4, 0, 6.2832); ctx.fill();
+    }
+    if (winLine) {
+      ctx.strokeStyle = '#e5484d'; ctx.lineWidth = 4; ctx.beginPath();
+      ctx.moveTo(px(winLine[0].x), px(winLine[0].y)); ctx.lineTo(px(winLine[1].x), px(winLine[1].y)); ctx.stroke();
+    }
+  }
+
+  var DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  function inb(x, y) { return x >= 0 && y >= 0 && x < N && y < N; }
+  // (x,y)에 p를 놓았을 때 방향 d의 연속 개수와 열린 끝 수
+  function line(x, y, p, d) {
+    var c = 1, e = 0, a = x + d[0], b = y + d[1];
+    while (inb(a, b) && B[b][a] === p) { c++; a += d[0]; b += d[1]; }
+    if (inb(a, b) && B[b][a] === 0) e++;
+    a = x - d[0]; b = y - d[1];
+    while (inb(a, b) && B[b][a] === p) { c++; a -= d[0]; b -= d[1]; }
+    if (inb(a, b) && B[b][a] === 0) e++;
+    return [c, e];
+  }
+  function val(c, e) {
+    if (c >= 5) return 100000;
+    if (e === 0) return 0;
+    if (c === 4) return e === 2 ? 10000 : 1000;
+    if (c === 3) return e === 2 ? 1000 : 100;
+    if (c === 2) return e === 2 ? 100 : 10;
+    return e === 2 ? 10 : 1;
+  }
+  function score(x, y, p) {
+    var s = 0, cnt3 = 0;
+    for (var k = 0; k < 4; k++) {
+      var r = line(x, y, p, DIRS[k]), v = val(r[0], r[1]);
+      s += v;
+      if (v >= 1000 && v < 10000) cnt3++;
+    }
+    if (cnt3 >= 2) s += 5000; // 쌍삼/사삼 같은 겹치는 공격
+    return s;
+  }
+  function checkWin(x, y, p) {
+    for (var k = 0; k < 4; k++) {
+      var d = DIRS[k], r = line(x, y, p, d);
+      if (r[0] >= 5) {
+        var a = x, b = y, a2 = x, b2 = y;
+        while (inb(a + d[0], b + d[1]) && B[b + d[1]][a + d[0]] === p) { a += d[0]; b += d[1]; }
+        while (inb(a2 - d[0], b2 - d[1]) && B[b2 - d[1]][a2 - d[0]] === p) { a2 -= d[0]; b2 -= d[1]; }
+        return [{ x: a2, y: b2 }, { x: a, y: b }];
+      }
+    }
+    return null;
+  }
+  function near(x, y) {
+    for (var j = -2; j <= 2; j++) for (var i = -2; i <= 2; i++) if (inb(x + i, y + j) && B[y + j][x + i]) return true;
+    return false;
+  }
+  function aiMove() {
+    if (!hist.length) return { x: 7, y: 7 };
+    var best = -1, cand = [], x, y;
+    for (y = 0; y < N; y++) for (x = 0; x < N; x++) if (!B[y][x] && near(x, y)) {
+      var s = score(x, y, ai) * 1.05 + score(x, y, me) + (7 - Math.abs(x - 7) + 7 - Math.abs(y - 7)) * 0.1;
+      if (s > best + 0.5) { best = s; cand = [{ x: x, y: y }]; }
+      else if (Math.abs(s - best) <= 0.5) cand.push({ x: x, y: y });
+    }
+    return cand[Math.floor(Math.random() * cand.length)];
+  }
+
+  function place(x, y, p) {
+    B[y][x] = p; hist.push({ x: x, y: y, p: p });
+    SFX.play(p === me ? 'move' : 'drop');
+    var w = checkWin(x, y, p);
+    if (w) {
+      over = true; winLine = w;
+      if (p === me) { rec.w++; $('msg').textContent = '승리!'; $('msg').style.color = '#2a9d4b'; SFX.play('tetris'); }
+      else { rec.l++; $('msg').textContent = '컴퓨터 승리'; $('msg').style.color = '#e5484d'; SFX.play('over'); }
+      saveRec(); showRec();
+    } else if (hist.length >= N * N) {
+      over = true; rec.d++; saveRec(); showRec(); $('msg').textContent = '무승부';
+      $('msg').style.color = '#888';
+    }
+    draw();
+  }
+  function aiTurn() {
+    if (over) return;
+    busy = true; $('msg').textContent = '컴퓨터 생각 중...'; $('msg').style.color = '#888';
+    setTimeout(function () {
+      var m = aiMove();
+      place(m.x, m.y, ai);
+      busy = false;
+      if (!over) $('msg').textContent = '';
+    }, 250);
+  }
+  function tap(cx, cy) {
+    if (over || busy) return;
+    var r = cv.getBoundingClientRect();
+    var x = Math.round(((cx - r.left) / r.width * SZ - M) / CELL), y = Math.round(((cy - r.top) / r.height * SZ - M) / CELL);
+    if (!inb(x, y) || B[y][x]) return;
+    place(x, y, me);
+    if (!over) aiTurn();
+  }
+  function newGame() {
+    var k, j;
+    B = []; for (j = 0; j < N; j++) { B[j] = []; for (k = 0; k < N; k++) B[j][k] = 0; }
+    hist = []; over = false; winLine = null; busy = false;
+    me = parseInt($('side').value, 10); ai = me === 1 ? 2 : 1;
+    $('msg').textContent = ''; draw();
+    if (ai === 1) aiTurn();
+  }
+  function undo() {
+    if (over || busy || !hist.length) return;
+    var last = hist.pop(); B[last.y][last.x] = 0;
+    if (last.p === ai && hist.length) { var h2 = hist.pop(); B[h2.y][h2.x] = 0; }
+    $('msg').textContent = '';
+    if (!hist.length && ai === 1) { aiTurn(); return; }
+    draw();
+  }
+  cv.addEventListener('touchend', function (e) { e.preventDefault(); var t = e.changedTouches[0]; tap(t.clientX, t.clientY); }, false);
+  cv.addEventListener('click', function (e) { tap(e.clientX, e.clientY); }, false);
+  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
+  $('go').onclick = newGame;
+  $('undo').onclick = undo;
+  $('side').onchange = newGame;
+  showRec(); newGame();
+})();
+</script>
+<script src="sound.js?v=24"></script>
+<script>SFX.attachBgm();</script>
+</body>
+</html>
