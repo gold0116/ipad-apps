@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>디버그</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  h2 { font-size: 18px; margin: 22px 0 8px; border-left: 5px solid #2f6fed; padding-left: 8px; }
+  .row { background: #fff; border-radius: 10px; padding: 10px; margin-bottom: 8px; overflow: hidden; }
+  .lb { font-size: 15px; color: #c00; font-weight: bold; margin-bottom: 4px; }
+  .box { background: #e6e8ec; display: inline-block; width: 150px; height: 150px; overflow: hidden; vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 15px; word-break: break-all; }
+  td:first-child { width: 36%; color: #666; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 디버그</div>
+<div class="wrap">
+
+  <h2>기기 정보</h2>
+  <table id="info"></table>
+
+  <h2>이모지 크기 시험</h2>
+  <p style="font-size:14px;color:#666">🐹이 회색 칸(150px)을 꽉 채우는 방식이 어느 것인지 알려 주세요.</p>
+
+  <div class="row"><div class="lb">A. 그냥 font-size:120px</div>
+    <div class="box" style="font-size:120px;line-height:150px;text-align:center">🐹</div></div>
+
+  <div class="row"><div class="lb">B. Apple Color Emoji 글꼴 + 120px</div>
+    <div class="box" style="font-family:'Apple Color Emoji';font-size:120px;line-height:150px;text-align:center">🐹</div></div>
+
+  <div class="row"><div class="lb">C. 30px 글자를 transform scale(4)</div>
+    <div class="box"><div style="font-size:30px;-webkit-transform:scale(4);-webkit-transform-origin:0 0;line-height:36px;padding:6px 0 0 6px">🐹</div></div></div>
+
+  <div class="row"><div class="lb">D. text-size-adjust:none + 120px</div>
+    <div class="box" style="-webkit-text-size-adjust:none;font-size:120px;line-height:150px;text-align:center">🐹</div></div>
+
+  <div class="row"><div class="lb">E. canvas로 그리기</div>
+    <canvas id="cv" width="150" height="150" style="background:#e6e8ec"></canvas></div>
+
+  <div class="row"><div class="lb">F. SVG text</div>
+    <svg width="150" height="150" style="background:#e6e8ec"><text x="75" y="120" font-size="120" text-anchor="middle">🐹</text></svg></div>
+
+  <div class="row"><div class="lb">G. zoom:4 (30px 글자)</div>
+    <div class="box"><div style="zoom:4;font-size:30px;line-height:36px">🐹</div></div></div>
+
+  <div class="row"><div class="lb">H. 글자 크기 비교 (숫자는 커지는데 이모지는?)</div>
+    <div style="font-size:20px">20px 가 🐹</div>
+    <div style="font-size:50px">50px 가 🐹</div>
+    <div style="font-size:100px;line-height:110px">100px 가 🐹</div></div>
+</div>
+<script>
+(function () {
+  function ok(f) { try { return f(); } catch (e) { return '오류: ' + e.message; } }
+  var st = ['없음', '대기', '확인 중', '내려받는 중', '최신', '오래됨', '없어짐'];
+  var rows = [
+    ['화면(CSS px)', window.innerWidth + ' x ' + window.innerHeight],
+    ['배율(DPR)', window.devicePixelRatio || 1],
+    ['홈 화면 앱 모드', window.navigator.standalone ? '예' : '아니오 (Safari)'],
+    ['오프라인 캐시', ok(function () { return st[window.applicationCache.status] || window.applicationCache.status; })],
+    ['저장소(localStorage)', ok(function () { localStorage.setItem('_t', '1'); localStorage.removeItem('_t'); return '사용 가능'; })],
+    ['주소', location.href],
+    ['브라우저', navigator.userAgent]
+  ];
+  var h = '';
+  for (var i = 0; i < rows.length; i++) h += '<tr><td>' + rows[i][0] + '</td><td>' + rows[i][1] + '</td></tr>';
+  document.getElementById('info').innerHTML = h;
+  var c = document.getElementById('cv').getContext('2d');
+  c.font = '110px "Apple Color Emoji", sans-serif';
+  c.textAlign = 'center';
+  c.fillText('🐹', 75, 115);
+})();
+</script>
+</body>
+</html>
