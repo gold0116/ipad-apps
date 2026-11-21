@@ -25,6 +25,17 @@
 </div>
 <script>
 (function () {
+  var sty = document.createElement('style'); document.getElementsByTagName('head')[0].appendChild(sty);
+  function layout() {
+    var B = Math.min(window.innerWidth - 24, window.innerHeight - 220, 660);
+    if (B < 240) B = 240;
+    var c = Math.floor(B / 3) - 8;
+    document.getElementById('g').style.width = (3 * (c + 8)) + 'px';
+    sty.innerHTML = '.h{width:' + c + 'px;height:' + c + 'px;line-height:' + c + 'px;font-size:' + Math.floor(c * 0.75) + 'px}';
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+  layout();
   var cells = [], score = 0, left = 30, active = -1, running = false, best = 0, tT = null, mT = null, hide = null;
   try { best = parseInt(localStorage.getItem('bestMole') || '0', 10) || 0; } catch (e) {}
   function $(i) { return document.getElementById(i); }

@@ -31,6 +31,14 @@
 <script>
 (function () {
   var N = 15, S = 20, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  function layout() {
+    var B = Math.min(window.innerWidth - 24, window.innerHeight - 330, 640);
+    if (B < 280) B = 280;
+    cv.style.width = B + 'px'; cv.style.height = B + 'px';
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+  layout();
   var snake, dir, nextDir, food, score, best = 0, timer = null, over;
   try { best = parseInt(localStorage.getItem('bestSnake') || '0', 10) || 0; } catch (e) {}
   function $(i) { return document.getElementById(i); }
