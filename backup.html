@@ -42,7 +42,7 @@
 
   <h2>3. 복원 (불러오기)</h2>
   <div class="box">
-    <textarea id="inp" placeholder="백업 텍스트를 여기에 붙여넣으세요"></textarea>
+    <textarea id="inp" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="백업 텍스트를 여기에 붙여넣으세요"></textarea>
     <p style="margin:8px 0 4px" class="small">복원 방식</p>
     <select id="mode"><option value="merge">합치기 (점수는 더 좋은 값, 메모·곡은 없는 것만 추가)</option><option value="replace">덮어쓰기 (백업 내용으로 통째로 바꿈)</option></select>
     <div style="margin-top:8px"><button class="btn" id="rs">복원하기</button></div>
@@ -123,6 +123,17 @@
     return n;
   }
 
+  // 노트북에서 받은 백업은 입력칸과 별도로 보관한다(일부 브라우저가 입력칸을 비우는 경우 대비)
+  var pending = '';
+  function setPending(t) {
+    pending = t;
+    try { sessionStorage.setItem('_pendingRestore', JSON.stringify({ t: new Date().getTime(), text: t })); } catch (e) {}
+    $('inp').value = t;
+    setTimeout(fill, 150); setTimeout(fill, 700); setTimeout(fill, 1800);
+  }
+  function fill() { if (pending && !$('inp').value) $('inp').value = pending; }
+  function clearPending() { pending = ''; try { sessionStorage.removeItem('_pendingRestore'); } catch (e) {} }
+
   $('mk').onclick = function () { $('out').value = makeBackup(); say('msg1', '백업 텍스트를 만들었어요 (' + Math.round($('out').value.length / 1024 * 10) / 10 + 'KB)', 'ok'); };
   $('sel').onclick = function () { var t = $('out'); t.focus(); t.setSelectionRange(0, t.value.length); };
   $('cp').onclick = function () {
@@ -132,13 +143,15 @@
     say('msg1', ok ? '복사했어요' : '이 기기는 자동 복사가 안 돼요. 선택된 상태에서 "복사"를 눌러 주세요.', ok ? 'ok' : 'warn');
   };
   $('rs').onclick = function () {
-    var o = parseBackup($('inp').value);
+    var raw = $('inp').value;
+    if (!raw.replace(/\s/g, '') && pending) raw = pending;   // 칸이 비었어도 노트북에서 받은 백업이 있으면 사용
+    var o = parseBackup(raw);
     if (!o) { say('msg2', '백업 텍스트가 아니에요. 처음부터 끝까지 그대로 붙여넣으세요.', 'warn'); return; }
     var mode = $('mode').value;
     if (mode === 'replace' && !confirm('현재 데이터를 백업 내용으로 바꿉니다. 계속할까요?')) return;
     var n = restore(o, mode);
     if (n < 0) say('msg2', '복원하지 못했어요(저장 공간 부족 등)', 'warn');
-    else { say('msg2', '복원했어요 (' + n + '개 항목 반영)', 'ok'); summary(); }
+    else { say('msg2', '복원했어요 (' + n + '개 항목 반영)', 'ok'); clearPending(); summary(); }
   };
 
   // ---- 노트북 서버 연동: 같은 탭에서 주소를 옮겨 다니며 window.name에 데이터를 실어 보낸다 ----
@@ -171,8 +184,9 @@
     try { history.replaceState(null, '', location.pathname); } catch (e) {}
     var o = parseBackup(txt);
     if (o) {
-      $('inp').value = txt;
-      $('banner').innerHTML = '<div class="box ok">노트북의 백업을 불러왔어요 (' + String(o.date || '').substr(0, 24) + '). 아래 3번에서 복원 방식을 고르고 <b>복원하기</b>를 누르세요.</div>';
+      setPending(txt);
+      var keys = 0; for (var kk in o.data) keys++;
+      $('banner').innerHTML = '<div class="box ok">노트북의 백업을 불러왔어요 (' + String(o.date || '').substr(0, 24) + ', 항목 ' + keys + '개, ' + Math.round(txt.length / 1024 * 10) / 10 + 'KB). 아래 3번에서 복원 방식을 고르고 <b>복원하기</b>를 누르세요.</div>';
       window.scrollTo(0, $('inp').offsetTop - 80);
     } else { $('banner').innerHTML = '<div class="box warn">노트북에서 가져온 데이터가 올바르지 않아요.</div>'; }
   } else if (wn.indexOf('IPADAPPS_') === 0) { window.name = ''; } // 남은 데이터 정리
