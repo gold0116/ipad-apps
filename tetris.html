@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>테트리스</title>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 <style>
   body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #game { display: -webkit-flex; display: flex; -webkit-justify-content: center; justify-content: center; margin-top: 8px; }
@@ -33,13 +33,14 @@
       <button class="btn gray" id="pause" style="width:100%;margin:10px 0 0;padding:10px 0;font-size:15px">일시정지</button>
       <button class="btn red" id="new" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">새 게임</button>
       <button class="btn gray" id="mus" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">배경음 켜짐</button>
+      <button class="btn gray" id="song" style="display:none;width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">음악: A</button>
     </div>
   </div>
   <div class="pad">
     <button class="btn" id="bl">◀</button><button class="btn" id="br">▶</button><button class="btn" id="bd">▼</button><button class="btn" id="bs" style="font-size:16px">회전</button><button class="btn gray" id="bh">떨구기</button>
   </div>
 </div>
-<script src="sound.js?v=14"></script>
+<script src="sound.js?v=15"></script>
 <script>
 (function () {
   var COLS = 10, ROWS = 20;
@@ -217,6 +218,21 @@
   function musLabel() { $('mus').textContent = SFX.isMusicMuted() ? '배경음 꺼짐' : '배경음 켜짐'; }
   press('mus', function () { SFX.setMusicMuted(!SFX.isMusicMuted()); musLabel(); });
   musLabel();
+
+  // 선택 곡: 파일(bradinsky.json)이 있을 때만 "음악 B" 버튼이 나타난다 (없으면 A만)
+  var song = 'a';
+  function songLabel() { $('song').textContent = song === 'b' ? '음악: B' : '음악: A'; }
+  press('song', function () {
+    song = song === 'a' ? 'b' : 'a'; SFX.setSong(song);
+    try { localStorage.setItem('tetrisSong', song); } catch (e) {}
+    songLabel();
+  });
+  SFX.loadSong('b', 'bradinsky.json', function (ok) {
+    if (!ok) return;
+    $('song').style.display = 'block';
+    try { if (localStorage.getItem('tetrisSong') === 'b') { song = 'b'; SFX.setSong('b'); } } catch (e) {}
+    songLabel();
+  });
   document.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
   document.addEventListener('keydown', function (e) {
     var k = e.keyCode;

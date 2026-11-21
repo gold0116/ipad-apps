@@ -20,7 +20,7 @@
   var wanted = false, playing = false, musicMuted = false, mTimer = null, mGain = null;
   var evIdx = 0, loopN = 0, lastT = 0, lastBeat = 0, tempo = 1, SONG_BEATS = 48, BEAT = 0.4;
   try { musicMuted = localStorage.getItem('musicMuted') === '1'; } catch (e) {}
-  var EV = (function () {
+  var EV_A = (function () {
     var N = { E5: 659.25, B4: 493.88, C5: 523.25, D5: 587.33, A4: 440, F5: 698.46, A5: 880, G5: 783.99, G4s: 415.3 };
     var m = [
       ['E5',1],['B4',.5],['C5',.5],['D5',1],['C5',.5],['B4',.5],
@@ -43,6 +43,41 @@
     ev.sort(function (a, c) { return a.t - c.t; });
     return ev;
   })();
+  var EV = EV_A;
+  var songs = { a: { ev: EV_A, beats: 48, beat: 0.4 } };
+  // 외부 곡 불러오기 (JSON: {bpm, beats, notes:[[박, MIDI음번호, 길이(박)], ...]})
+  function loadSong(id, url, done) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', url + '?t=' + new Date().getTime());
+      x.onreadystatechange = function () {
+        if (x.readyState !== 4) return;
+        var ok = false;
+        if (x.status === 200 || (x.status === 0 && x.responseText)) {
+          try {
+            var j = JSON.parse(x.responseText), ev = [], i;
+            for (i = 0; i < j.notes.length; i++) {
+              var n = j.notes[i][1];
+              ev.push({ t: j.notes[i][0], f: 440 * Math.pow(2, (n - 69) / 12), d: j.notes[i][2], k: n >= 72 ? 'm' : (n <= 50 ? 'b' : 'a') });
+            }
+            ev.sort(function (a, c) { return a.t - c.t; });
+            songs[id] = { ev: ev, beats: j.beats, beat: 60 / j.bpm };
+            ok = true;
+          } catch (e) {}
+        }
+        if (done) done(ok);
+      };
+      x.send();
+    } catch (e) { if (done) done(false); }
+  }
+  function setSong(id) {
+    var s = songs[id];
+    if (!s) return;
+    var was = playing;
+    halt();
+    EV = s.ev; SONG_BEATS = s.beats; BEAT = s.beat; evIdx = 0; loopN = 0;
+    if (wanted && was) startMusic(true);
+  }
   function mtone(f, dur, type, vol, when) {
     try {
       var o = ctx.createOscillator(), g = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
@@ -60,6 +95,7 @@
       if (when > now + 0.4) break;
       if (when < now) when = now + 0.01;
       if (e.k === 'm') mtone(e.f, e.d * bs * 0.92, 'square', 0.045, when);
+      else if (e.k === 'a') mtone(e.f, e.d * bs * 0.9, 'square', 0.028, when);
       else mtone(e.f, e.d * bs, 'triangle', 0.09, when);
       lastT = when; lastBeat = beat;
       evIdx++; if (evIdx >= EV.length) { evIdx = 0; loopN++; }
@@ -133,8 +169,11 @@
 
   window.SFX = {
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 14,
-    info: function () { return { version: 14, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    version: 15,
+    loadSong: loadSong,
+    setSong: setSong,
+    hasSong: function (id) { return !!songs[id]; },
+    info: function () { return { version: 15, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
