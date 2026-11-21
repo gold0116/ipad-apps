@@ -1,9 +1,10 @@
 CACHE MANIFEST
-# v15 2026-11-21
+# v16 2026-11-21
 
-emoji.js?v=15
-sound.js?v=15
+emoji.js?v=16
+sound.js?v=16
 tetris.html
+mymusic.html
 report.html
 dino.html
 balloon.html
@@ -17,7 +18,7 @@ tictactoe.html
 memory.html
 mole.html
 slide.html
-style.css?v=15
+style.css?v=16
 
 NETWORK:
 *

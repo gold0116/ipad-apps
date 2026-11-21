@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>내 음악</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  h2 { font-size: 18px; margin: 20px 0 8px; border-left: 5px solid #2f6fed; padding-left: 8px; }
+  .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+  input[type=text], textarea { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font-family: inherit; }
+  textarea { height: 110px; font-size: 13px; font-family: monospace; }
+  #list { list-style: none; margin: 0; padding: 0; }
+  #list li { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; overflow: hidden; }
+  #list li.on { background: #2f6fed; color: #fff; }
+  #list .nm { font-size: 17px; font-weight: bold; }
+  #list .sub { font-size: 13px; opacity: .75; margin: 2px 0 8px; }
+  #list .btn { padding: 8px 16px; font-size: 15px; margin: 2px 4px 2px 0; }
+  .row { margin: 8px 0; font-size: 16px; }
+  select { font-size: 16px; padding: 6px; }
+  #msg { font-size: 14px; margin-top: 6px; }
+  .err { color: #c33; } .ok { color: #1a7f3c; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 내 음악</div>
+<div class="wrap">
+
+  <div class="card" id="player">
+    <div id="now" style="font-size:16px;font-weight:bold">재생할 곡을 고르세요</div>
+    <div class="row">
+      <label><input type="checkbox" id="loop" checked> 반복</label>
+      &nbsp; 속도 <select id="spd"><option value="0.6">0.6×</option><option value="0.8">0.8×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
+      <button class="btn red" id="stop" style="padding:8px 16px;font-size:15px;margin-left:8px">정지</button>
+    </div>
+    <div id="hint" style="font-size:13px;color:#888"></div>
+  </div>
+
+  <h2>곡 목록</h2>
+  <ul id="list"></ul>
+  <p id="empty" style="color:#888;font-size:15px;display:none">저장된 곡이 없어요. 아래에서 곡 텍스트를 붙여넣어 저장하세요.</p>
+
+  <h2>곡 추가</h2>
+  <div class="card">
+    <p style="margin:0 0 4px;font-size:14px">곡 이름</p>
+    <input type="text" id="nm" placeholder="(비우면 텍스트 안의 이름을 써요)">
+    <p style="margin:10px 0 4px;font-size:14px">곡 텍스트</p>
+    <textarea id="tx" placeholder="노트북 서버의 MIDI 변환 페이지에서 복사한 텍스트를 여기에 붙여넣으세요"></textarea>
+    <div style="margin-top:8px"><button class="btn" id="save">저장</button> <button class="btn gray" id="try">미리 듣기</button></div>
+    <div id="msg"></div>
+  </div>
+
+  <p style="font-size:13px;color:#888;margin-top:16px">곡은 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요). 저장한 곡은 <b>테트리스</b>의 배경음으로도 고를 수 있어요. 소리가 안 나면 화면 오른쪽 위 "소리 켜짐"을 확인하세요.</p>
+</div>
+<script src="sound.js?v=16"></script>
+<script>
+(function () {
+  var KEY = 'mymusic-list-v1';
+  var list = [], playingId = null;
+  function $(i) { return document.getElementById(i); }
+  function load() { try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { list = []; } }
+  function store() { try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch (e) { say('저장 공간이 부족하거나 저장할 수 없어요', true); return false; } }
+  function say(t, err) { $('msg').className = err ? 'err' : 'ok'; $('msg').textContent = t; }
+  function fmt(sec) { sec = Math.round(sec); return Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + (sec % 60); }
+
+  function parseText(txt) {
+    var o;
+    try { o = JSON.parse(txt.replace(/^\s+|\s+$/g, '')); } catch (e) { return { ok: false, error: '텍스트 형식이 맞지 않아요. 변환 페이지에서 만든 텍스트를 처음부터 끝까지 그대로 붙여넣으세요.' }; }
+    var r = SFX.defineSong('__check', o);
+    if (!r.ok) return { ok: false, error: '곡으로 읽을 수 없어요: ' + r.error };
+    return { ok: true, obj: o, count: r.count, seconds: r.seconds };
+  }
+
+  function render() {
+    var ul = $('list'); ul.innerHTML = '';
+    $('empty').style.display = list.length ? 'none' : 'block';
+    for (var i = 0; i < list.length; i++) (function (s) {
+      var li = document.createElement('li'); li.className = s.id === playingId ? 'on' : '';
+      var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = s.name;
+      var sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = '음 ' + s.count + '개 · ' + fmt(s.seconds);
+      var bp = document.createElement('button'); bp.className = 'btn'; bp.textContent = s.id === playingId ? '다시 재생' : '재생'; bp.onclick = function () { play(s); };
+      var bd = document.createElement('button'); bd.className = 'btn gray'; bd.textContent = '삭제';
+      bd.onclick = function () {
+        if (!confirm('"' + s.name + '"을(를) 삭제할까요?')) return;
+        if (playingId === s.id) stop();
+        for (var k = 0; k < list.length; k++) if (list[k].id === s.id) { list.splice(k, 1); break; }
+        store(); render();
+      };
+      li.appendChild(nm); li.appendChild(sub); li.appendChild(bp); li.appendChild(bd); ul.appendChild(li);
+    })(list[i]);
+  }
+
+  function playObj(id, obj, name) {
+    var r = SFX.defineSong('cur_' + id, obj);
+    if (!r.ok) { say('재생할 수 없어요: ' + r.error, true); return false; }
+    SFX.setLoop($('loop').checked);
+    SFX.setSong('cur_' + id);
+    SFX.setTempo(parseFloat($('spd').value));
+    SFX.musicStart(true);
+    playingId = id; $('now').textContent = '재생 중: ' + name;
+    $('hint').textContent = SFX.isMuted() ? '효과음이 꺼져 있어 소리가 안 나요. 오른쪽 위 "소리 꺼짐"을 눌러 켜세요.' : (SFX.isMusicMuted() ? '배경음이 꺼져 있어요(테트리스의 "배경음" 버튼으로 켜세요).' : '');
+    return true;
+  }
+  function play(s) { if (playObj(s.id, JSON.parse(s.text), s.name)) render(); }
+  function stop() { SFX.musicStop(true); playingId = null; $('now').textContent = '재생할 곡을 고르세요'; render(); }
+
+  $('stop').onclick = stop;
+  $('loop').onchange = function () { SFX.setLoop(this.checked); };
+  $('spd').onchange = function () { SFX.setTempo(parseFloat(this.value)); };
+  SFX.onMusicEnd(function () { playingId = null; $('now').textContent = '재생할 곡을 고르세요'; render(); });
+
+  $('try').onclick = function () {
+    var p = parseText($('tx').value);
+    if (!p.ok) { say(p.error, true); return; }
+    say('미리 듣기: 음 ' + p.count + '개 · ' + fmt(p.seconds), false);
+    playObj('__try', p.obj, $('nm').value || p.obj.name || '미리 듣기');
+  };
+  $('save').onclick = function () {
+    var raw = $('tx').value;
+    if (!raw.replace(/\s/g, '')) { say('곡 텍스트를 붙여넣으세요', true); return; }
+    var p = parseText(raw);
+    if (!p.ok) { say(p.error, true); return; }
+    var name = $('nm').value.replace(/^\s+|\s+$/g, '') || p.obj.name || '이름 없는 곡';
+    p.obj.name = name;
+    list.push({ id: 's' + new Date().getTime(), name: name, count: p.count, seconds: p.seconds, text: JSON.stringify(p.obj) });
+    if (!store()) { list.pop(); return; }
+    $('tx').value = ''; $('nm').value = '';
+    say('"' + name + '" 저장했어요', false);
+    render();
+  };
+
+  load(); render();
+})();
+</script>
+</body>
+</html>
