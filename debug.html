@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>디버그</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=14">
 <style>
   h2 { font-size: 18px; margin: 22px 0 8px; border-left: 5px solid #2f6fed; padding-left: 8px; }
   .row { background: #fff; border-radius: 10px; padding: 10px; margin-bottom: 8px; overflow: hidden; }
@@ -28,6 +28,7 @@
   <table id="sinfo"></table>
   <div style="margin-top:8px">
     <button class="btn" id="s1">점프</button><button class="btn" id="s2">동전</button><button class="btn" id="s3">충돌</button><button class="btn" id="s4">줄 지움</button>
+    <button class="btn gray" id="m1">배경음 시작</button><button class="btn gray" id="m2">배경음 정지</button>
   </div>
 
   <h2>이모지 크기 시험</h2>
@@ -65,13 +66,15 @@
     <div style="font-size:50px">50px 가 🐹</div>
     <div style="font-size:100px;line-height:110px">100px 가 🐹</div></div>
 </div>
-<script src="emoji.js"></script>
-<script src="sound.js"></script>
+<script src="emoji.js?v=14"></script>
+<script src="sound.js?v=14"></script>
 <script>
 (function () {
   function show() {
     var i = SFX.info();
     document.getElementById('sinfo').innerHTML =
+      '<tr><td>sound.js 버전</td><td>' + (i.version || '예전 버전(14 미만)') + '</td></tr>' +
+      '<tr><td>배경음 상태</td><td>' + (i.music ? '재생 중' : '멈춤') + ' (요청 ' + (i.wanted ? '예' : '아니오') + ', 끔 설정 ' + (i.musicMuted ? '예' : '아니오') + ')</td></tr>' +
       '<tr><td>오디오 지원</td><td>' + (i.supported ? '예' : '아니오') + '</td></tr>' +
       '<tr><td>오디오 시작됨</td><td>' + (i.started ? '예' : '아직 (화면을 한 번 터치하면 시작)') + '</td></tr>' +
       '<tr><td>상태</td><td>' + i.state + '</td></tr>' +
@@ -83,6 +86,13 @@
     b.addEventListener('touchend', function () { setTimeout(function () { SFX.play(map[id]); show(); }, 30); }, false);
     b.addEventListener('click', function () { SFX.play(map[id]); show(); }, false);
   })(id);
+  function tap(id, fn) {
+    var b = document.getElementById(id);
+    b.addEventListener('touchend', function () { setTimeout(function () { fn(); show(); }, 30); }, false);
+    b.addEventListener('click', function () { fn(); show(); }, false);
+  }
+  tap('m1', function () { SFX.musicStart(true); });
+  tap('m2', function () { SFX.musicStop(true); });
   show();
   setInterval(show, 1500);
 })();

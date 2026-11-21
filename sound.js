@@ -79,6 +79,20 @@
     if (mGain && ctx) { try { mGain.gain.setValueAtTime(0, ctx.currentTime); } catch (e) {} }
     mGain = null;
   }
+  // 구형 기기엔 콘솔이 없어서, 자바스크립트 오류를 화면 아래에 빨간 글씨로 보여 준다
+  var oldErr = window.onerror, errShown = 0;
+  window.onerror = function (msg, url, line) {
+    try {
+      if (errShown < 3) {
+        errShown++;
+        var d = document.createElement('div');
+        d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;background:#e5484d;color:#fff;font-size:12px;padding:4px 8px;z-index:9999;word-break:break-all';
+        d.textContent = '오류: ' + msg + ' (' + String(url).split('/').pop() + ':' + line + ')';
+        document.body.appendChild(d);
+      }
+    } catch (e) {}
+    return oldErr ? oldErr.apply(this, arguments) : false;
+  };
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) halt(); else if (wanted) startMusic(false);
   }, false);
@@ -119,7 +133,8 @@
 
   window.SFX = {
     play: function (name) { if (FX[name]) FX[name](); },
-    info: function () { return { supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted }; },
+    version: 14,
+    info: function () { return { version: 14, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
