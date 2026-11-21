@@ -10,7 +10,7 @@
   .grid { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin: 0 -8px; }
   .tile { width: 50%; padding: 8px; }
   .tile a { display: block; background: #fff; border-radius: 18px; padding: 28px 8px; text-align: center; font-size: 20px; font-weight: bold; -webkit-box-shadow: 0 2px 6px rgba(0,0,0,.12); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
-  .tile span { display: block; font-size: 54px; margin-bottom: 8px; }
+  .tile span.ic { display: block; height: 76px; margin: 0 auto 10px; }
   .tile small { display: block; font-size: 13px; font-weight: normal; color: #777; margin-top: 4px; }
 </style>
 </head>
@@ -18,17 +18,18 @@
 <div class="top">내 앱</div>
 <div class="wrap">
   <div class="grid">
-    <div class="tile"><a href="memo.html"><span>📝</span>메모<small>자동 저장</small></a></div>
-    <div class="tile"><a href="2048.html"><span>🔢</span>2048<small>퍼즐 게임</small></a></div>
-    <div class="tile"><a href="mines.html"><span>💣</span>지뢰찾기<small>터치로 즐기기</small></a></div>
-    <div class="tile"><a href="snake.html"><span>🐍</span>스네이크<small>스와이프로 조종</small></a></div>
-    <div class="tile"><a href="tictactoe.html"><span>⭕</span>틱택토<small>컴퓨터와 대결</small></a></div>
-    <div class="tile"><a href="memory.html"><span>🃏</span>짝맞추기<small>기억력 게임</small></a></div>
-    <div class="tile"><a href="mole.html"><span>🔨</span>두더지 잡기<small>30초 도전</small></a></div>
-    <div class="tile"><a href="slide.html"><span>🧩</span>15퍼즐<small>숫자 맞추기</small></a></div>
-    <div class="tile"><a href="debug.html"><span>🛠</span>디버그<small>기기 정보·시험</small></a></div>
+    <div class="tile"><a href="memo.html"><span class="ic" data-emo="72">📝</span>메모<small>자동 저장</small></a></div>
+    <div class="tile"><a href="2048.html"><span class="ic" data-emo="72">🔢</span>2048<small>퍼즐 게임</small></a></div>
+    <div class="tile"><a href="mines.html"><span class="ic" data-emo="72">💣</span>지뢰찾기<small>터치로 즐기기</small></a></div>
+    <div class="tile"><a href="snake.html"><span class="ic" data-emo="72">🐍</span>스네이크<small>스와이프로 조종</small></a></div>
+    <div class="tile"><a href="tictactoe.html"><span class="ic" data-emo="72">⭕</span>틱택토<small>컴퓨터와 대결</small></a></div>
+    <div class="tile"><a href="memory.html"><span class="ic" data-emo="72">🃏</span>짝맞추기<small>기억력 게임</small></a></div>
+    <div class="tile"><a href="mole.html"><span class="ic" data-emo="72">🔨</span>두더지 잡기<small>30초 도전</small></a></div>
+    <div class="tile"><a href="slide.html"><span class="ic" data-emo="72">🧩</span>15퍼즐<small>숫자 맞추기</small></a></div>
+    <div class="tile"><a href="debug.html"><span class="ic" data-emo="72">🛠</span>디버그<small>기기 정보·시험</small></a></div>
   </div>
   <p style="color:#888;font-size:14px;text-align:center;margin-top:24px">홈 화면에 추가: 공유 버튼 → "홈 화면에 추가"</p>
 </div>
+<script src="emoji.js"></script>
 </body>
 </html>

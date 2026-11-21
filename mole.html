@@ -23,15 +23,18 @@
   <div id="msg"></div>
   <div style="text-align:center"><button class="btn" id="go">시작</button></div>
 </div>
+<script src="emoji.js"></script>
 <script>
 (function () {
+  var emSize = 60;
   var sty = document.createElement('style'); document.getElementsByTagName('head')[0].appendChild(sty);
   function layout() {
     var B = Math.min(window.innerWidth - 24, window.innerHeight - 220, 660);
     if (B < 240) B = 240;
     var c = Math.floor(B / 3) - 8;
     document.getElementById('g').style.width = (3 * (c + 8)) + 'px';
-    sty.innerHTML = '.h{width:' + c + 'px;height:' + c + 'px;line-height:' + c + 'px;font-size:' + Math.floor(c * 0.75) + 'px}';
+    emSize = Math.floor(c * 0.7);
+    sty.innerHTML = '.h{width:' + c + 'px;height:' + c + 'px;line-height:' + c + 'px}';
   }
   window.addEventListener('resize', layout, false);
   window.addEventListener('orientationchange', layout, false);
@@ -49,7 +52,7 @@
   }
   function show() {
     $('sc').textContent = score; $('tm').textContent = left; $('best').textContent = best;
-    for (var i = 0; i < 9; i++) cells[i].textContent = (i === active) ? '🐹' : '';
+    for (var i = 0; i < 9; i++) cells[i].innerHTML = (i === active) ? emo('🐹', emSize) : '';
   }
   function hit(i) {
     if (!running || i !== active) return;

@@ -25,16 +25,19 @@
   <div id="msg"></div>
   <div style="text-align:center"><button class="btn" id="re">새 게임</button></div>
 </div>
+<script src="emoji.js"></script>
 <script>
 (function () {
   var EM = ['🐶','🐱','🐭','🐹','🐰','🐻','🐼','🐨'];
+  var emSize = 60;
   var sty = document.createElement('style'); document.getElementsByTagName('head')[0].appendChild(sty);
   function layout() {
     var B = Math.min(window.innerWidth - 24, window.innerHeight - 230, 660);
     if (B < 240) B = 240;
     var c = Math.floor(B / 4) - 8;
     document.getElementById('g').style.width = (4 * (c + 8)) + 'px';
-    sty.innerHTML = '.k{width:' + c + 'px;height:' + c + 'px;line-height:' + c + 'px;font-size:' + Math.floor(c * 0.65) + 'px}';
+    emSize = Math.floor(c * 0.65);
+    sty.innerHTML = '.k{width:' + c + 'px;height:' + c + 'px;line-height:' + c + 'px;font-size:' + Math.floor(c * 0.5) + 'px}';
   }
   window.addEventListener('resize', layout, false);
   window.addEventListener('orientationchange', layout, false);
@@ -52,7 +55,7 @@
     var h = '';
     for (var i = 0; i < 16; i++) {
       var c = cards[i];
-      h += '<div class="k' + (c.up || c.ok ? ' up' : '') + (c.ok ? ' ok' : '') + '" data-i="' + i + '">' + (c.up || c.ok ? c.v : '?') + '</div>';
+      h += '<div class="k' + (c.up || c.ok ? ' up' : '') + (c.ok ? ' ok' : '') + '" data-i="' + i + '">' + (c.up || c.ok ? emo(c.v, emSize) : '?') + '</div>';
     }
     $('g').innerHTML = h;
     var cs = $('g').childNodes;

@@ -47,13 +47,23 @@
   <div class="row"><div class="lb">G. zoom:4 (30px 글자)</div>
     <div class="box"><div style="zoom:4;font-size:30px;line-height:36px">🐹</div></div></div>
 
+  <h2>emo() 보정 시험</h2>
+  <p style="font-size:14px;color:#666">앱에서 쓰는 방식이에요. 🐹이 회색 칸(150px)에 <b>딱 맞는</b> 것이 어느 것인지 알려 주세요. (기준 크기 가정값이 다름)</p>
+  <div class="row"><div class="lb">I. 기준 20px 가정</div><div class="box" id="e20"></div></div>
+  <div class="row"><div class="lb">J. 기준 24px 가정 (현재 앱 설정)</div><div class="box" id="e24"></div></div>
+  <div class="row"><div class="lb">K. 기준 30px 가정</div><div class="box" id="e30"></div></div>
+
   <div class="row"><div class="lb">H. 글자 크기 비교 (숫자는 커지는데 이모지는?)</div>
     <div style="font-size:20px">20px 가 🐹</div>
     <div style="font-size:50px">50px 가 🐹</div>
     <div style="font-size:100px;line-height:110px">100px 가 🐹</div></div>
 </div>
+<script src="emoji.js"></script>
 <script>
 (function () {
+  document.getElementById('e20').innerHTML = emo('🐹', 150, 20);
+  document.getElementById('e24').innerHTML = emo('🐹', 150, 24);
+  document.getElementById('e30').innerHTML = emo('🐹', 150, 30);
   function ok(f) { try { return f(); } catch (e) { return '오류: ' + e.message; } }
   var st = ['없음', '대기', '확인 중', '내려받는 중', '최신', '오래됨', '없어짐'];
   var rows = [
