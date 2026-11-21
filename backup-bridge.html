@@ -29,6 +29,8 @@
   var h = location.hash.substr(1), parts = h.split('?'), mode = parts[0], back = '';
   var m = /(?:^|&)back=([^&]*)/.exec(parts[1] || '');
   if (m) { try { back = decodeURIComponent(m[1]); } catch (e) {} }
+  var dm = /(?:^|&)d=([^&]*)/.exec(parts.slice(1).join('?'));   // 주소에 실어 온 백업(window.name이 막힌 브라우저용)
+  var viaUrl = ''; if (dm) { try { viaUrl = decodeURIComponent(dm[1]); } catch (e) {} }
   function setStatus(t, cls) { $('st').className = 'box ' + (cls || ''); $('st').textContent = t; }
   function home(suffix) { if (!/^https?:\/\//i.test(back)) { $('ret').style.display = 'block'; $('back').value = back; $('goBack').onclick = function () { var b = $('back').value; if (/^https?:\/\//i.test(b)) location.href = b + suffix; }; return; } location.href = back + suffix; }
 
@@ -41,9 +43,11 @@
   }
 
   if (mode === 'send') {
-    var wn = window.name || '';
-    if (wn.indexOf('IPADAPPS_BACKUP:') !== 0) { setStatus('보낼 백업 데이터가 없어요. 앱의 백업/복원 화면에서 다시 시작하세요.', 'warn'); home('#fail'); return; }
-    var text = wn.substr(16); window.name = '';
+    var wn = window.name || '', text = '';
+    if (viaUrl) text = viaUrl;
+    else if (wn.indexOf('IPADAPPS_BACKUP:') === 0) text = wn.substr(16);
+    window.name = '';
+    if (!text) { setStatus('보낼 백업 데이터가 없어요. 앱의 백업/복원 화면에서 다시 시작하세요.', 'warn'); home('#fail'); return; }
     setStatus('노트북에 저장하는 중...');
     xhr('POST', '/api/backup', 'text=' + encodeURIComponent(text), function (st, res) {
       if (st === 200) { setStatus('노트북에 저장했어요. 앱으로 돌아갑니다...', 'ok'); setTimeout(function () { home('#sent'); }, 700); }
@@ -52,7 +56,13 @@
   } else if (mode === 'restore') {
     setStatus('노트북의 백업을 가져오는 중...');
     xhr('GET', '/api/backup', null, function (st, res) {
-      if (st === 200) { window.name = 'IPADAPPS_RESTORE:' + res; setStatus('가져왔어요. 앱으로 돌아갑니다...', 'ok'); setTimeout(function () { home('#restore'); }, 500); }
+      if (st === 200) {
+        window.name = 'IPADAPPS_RESTORE:' + res;
+        var enc = encodeURIComponent(res);
+        setStatus('가져왔어요. 앱으로 돌아갑니다...', 'ok');
+        // 주소에도 함께 실어 보낸다(크기가 작을 때). window.name이 막힌 브라우저에서도 전달됨
+        setTimeout(function () { home(enc.length < 60000 ? '#restore=' + enc : '#restore'); }, 500);
+      }
       else { setStatus(st === 404 ? '노트북에 저장된 백업이 없어요.' : '가져오지 못했어요 (' + st + ')', 'warn'); setTimeout(function () { home('#fail'); }, 1500); }
     });
   } else {
