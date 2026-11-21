@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>지뢰찾기</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
+  #grid { margin: 0 auto; width: 324px; }
+  .cell { float: left; width: 36px; height: 36px; line-height: 36px; text-align: center; font-weight: bold; font-size: 18px; background: #c8ccd3; border: 1px solid #fff; border-right-color: #8a8f98; border-bottom-color: #8a8f98; }
+  .cell.open { background: #eceef1; border: 1px solid #d5d8dd; }
+  .cell.boom { background: #e5484d; }
+  .n1{color:#2f6fed}.n2{color:#2a9d4a}.n3{color:#e5484d}.n4{color:#6b3fc4}.n5{color:#a33}.n6{color:#099}
+  .clr { clear: both; }
+  #mode { text-align: center; margin: 12px 0; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 지뢰찾기</div>
+<div class="wrap">
+  <div id="info">남은 지뢰 <b id="left">0</b></div>
+  <div id="grid"></div><div class="clr"></div>
+  <div id="msg"></div>
+  <div id="mode">
+    <button class="btn" id="m1">⛏ 열기</button>
+    <button class="btn gray" id="m2">🚩 깃발</button>
+    <button class="btn gray" id="re">새 게임</button>
+  </div>
+  <p style="text-align:center;color:#888">모드를 고르고 칸을 탭하세요 (9×9, 지뢰 10개)</p>
+</div>
+<script>
+(function () {
+  var W = 9, H = 9, M = 10;
+  var cells, opened, flagged, mines, started, done, flagMode = false, openCnt;
+  var grid = document.getElementById('grid');
+  function $(i) { return document.getElementById(i); }
+
+  function init() {
+    cells = []; started = false; done = false; openCnt = 0; flagged = 0;
+    for (var i = 0; i < W * H; i++) cells.push({ m: false, o: false, f: false, n: 0 });
+    $('msg').textContent = ''; draw();
+  }
+  function nb(i) {
+    var r = Math.floor(i / W), c = i % W, a = [];
+    for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      var rr = r + dr, cc = c + dc;
+      if (rr >= 0 && rr < H && cc >= 0 && cc < W) a.push(rr * W + cc);
+    }
+    return a;
+  }
+  function place(safe) {
+    var n = 0;
+    while (n < M) {
+      var p = Math.floor(Math.random() * W * H);
+      if (p === safe || cells[p].m) continue;
+      cells[p].m = true; n++;
+    }
+    for (var i = 0; i < cells.length; i++) {
+      var k = 0, a = nb(i);
+      for (var j = 0; j < a.length; j++) if (cells[a[j]].m) k++;
+      cells[i].n = k;
+    }
+  }
+  function open(i) {
+    var st = [i];
+    while (st.length) {
+      var x = st.pop(), c = cells[x];
+      if (c.o || c.f) continue;
+      c.o = true; openCnt++;
+      if (c.n === 0 && !c.m) { var a = nb(x); for (var j = 0; j < a.length; j++) st.push(a[j]); }
+    }
+  }
+  function tap(i) {
+    if (done) return;
+    var c = cells[i];
+    if (flagMode) {
+      if (c.o) return;
+      c.f = !c.f; flagged += c.f ? 1 : -1; draw(); return;
+    }
+    if (c.f || c.o) return;
+    if (!started) { place(i); started = true; }
+    if (c.m) {
+      done = true;
+      for (var k = 0; k < cells.length; k++) if (cells[k].m) cells[k].o = true;
+      c.boom = true; $('msg').textContent = '💥 지뢰!'; draw(); return;
+    }
+    open(i);
+    if (openCnt === W * H - M) { done = true; $('msg').textContent = '🎉 성공!'; }
+    draw();
+  }
+  function draw() {
+    grid.innerHTML = '';
+    for (var i = 0; i < cells.length; i++) {
+      (function (idx) {
+        var c = cells[idx], d = document.createElement('div');
+        d.className = 'cell' + (c.o ? ' open' : '') + (c.boom ? ' boom' : '');
+        if (c.f && !c.o) d.textContent = '🚩';
+        else if (c.o && c.m) d.textContent = '💣';
+        else if (c.o && c.n) { d.textContent = c.n; d.className += ' n' + c.n; }
+        d.onclick = function () { tap(idx); };
+        grid.appendChild(d);
+      })(i);
+    }
+    $('left').textContent = M - flagged;
+  }
+  function setMode(f) { flagMode = f; $('m1').className = 'btn' + (f ? ' gray' : ''); $('m2').className = 'btn' + (f ? '' : ' gray'); }
+  $('m1').onclick = function () { setMode(false); };
+  $('m2').onclick = function () { setMode(true); };
+  $('re').onclick = init;
+  init();
+})();
+</script>
+</body>
+</html>
