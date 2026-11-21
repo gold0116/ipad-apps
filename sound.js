@@ -195,9 +195,49 @@
     over:   function () { tone(392, 0.2, 'square', 0.12, 0, 330); tone(330, 0.2, 'square', 0.12, 0.2, 260); tone(262, 0.4, 'square', 0.12, 0.4, 130); }
   };
 
+  // 게임 화면 위쪽에 "배경음" 선택 칸을 붙인다. 게임마다 선택을 기억하고, 꺼짐이 기본값.
+  function attachBgm() {
+    var top = document.querySelector('.top');
+    if (!top || document.getElementById('bgmbar')) return;
+    var page = location.pathname.split('/').pop() || 'index.html';
+    var KEY = 'bgm:' + page;
+    var bar = document.createElement('div'); bar.id = 'bgmbar';
+    bar.style.cssText = 'background:#e9eef9;padding:6px 12px;font-size:14px;color:#334;line-height:30px';
+    var lab = document.createElement('span'); lab.textContent = '배경음 ';
+    var sel = document.createElement('select'); sel.style.cssText = 'font-size:14px;padding:4px;max-width:72%';
+    bar.appendChild(lab); bar.appendChild(sel);
+    top.parentNode.insertBefore(bar, top.nextSibling);
+    function add(id, label) { var o = document.createElement('option'); o.value = id; o.textContent = label; sel.appendChild(o); }
+    add('off', '끄기'); add('a', '코로베이니키 (러시아 민요)');
+    try {
+      var my = JSON.parse(localStorage.getItem('mymusic-list-v1') || '[]');
+      for (var i = 0; i < my.length; i++) {
+        var r = defineSong('my' + my[i].id, JSON.parse(my[i].text));
+        if (r.ok) add('my' + my[i].id, '내 음악: ' + my[i].name);
+      }
+    } catch (e) {}
+    function apply(id, save) {
+      if (save) { try { localStorage.setItem(KEY, id); } catch (e) {} }
+      if (id === 'off') { wanted = false; halt(); evIdx = 0; loopN = 0; ended = false; return; }
+      loopOn = true; tempo = 1; setSong(id); startMusic(true);
+    }
+    function applySaved() {
+      var id = 'off', ok = false;
+      try { id = localStorage.getItem(KEY) || 'off'; } catch (e) {}
+      for (var k = 0; k < sel.options.length; k++) if (sel.options[k].value === id) ok = true;
+      if (!ok) id = 'off';
+      if (sel.value !== id) sel.value = id;
+      if (id !== 'off') apply(id, false);
+    }
+    sel.onchange = function () { apply(sel.value, true); };
+    loadSong('b', 'bradinsky.json', function (ok) { if (ok) { add('b', '음악 B'); applySaved(); } });
+    applySaved();
+  }
+
   window.SFX = {
+    attachBgm: attachBgm,
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 16,
+    version: 24,
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -205,7 +245,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 16, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 24, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

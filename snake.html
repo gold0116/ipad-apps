@@ -32,7 +32,7 @@
 (function () {
   var N = 15, S = 20, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
   function layout() {
-    var B = Math.min(window.innerWidth - 24, window.innerHeight - 330, 640);
+    var B = Math.min(window.innerWidth - 24, window.innerHeight - 370, 640);
     if (B < 280) B = 280;
     cv.style.width = B + 'px'; cv.style.height = B + 'px';
   }
@@ -100,5 +100,7 @@
   snake = [{ x: 7, y: 7 }]; dir = nextDir = { x: 1, y: 0 }; score = 0; placeFood(); draw();
 })();
 </script>
+<script src="sound.js?v=24"></script>
+<script>SFX.attachBgm();</script>
 </body>
 </html>
