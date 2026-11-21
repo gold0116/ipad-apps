@@ -31,6 +31,61 @@
     <button class="btn gray" id="m1">배경음 시작</button><button class="btn gray" id="m2">배경음 정지</button>
   </div>
 
+  <h2>유튜브 재생 시험</h2>
+  <p style="font-size:14px;color:#666">이 기기에서 유튜브 공식 플레이어가 열리고 재생되는지 확인해요. 아래 버튼을 하나씩 눌러 보고 결과를 알려 주세요.</p>
+  <table id="vinfo"></table>
+  <div class="row" style="margin-top:8px">
+    <div class="lb">영상 주소 또는 ID (기본: 유튜브 첫 영상)</div>
+    <input type="text" id="yid" value="jNQXAC9IVRw" style="width:100%;font-size:16px;padding:10px;border:1px solid #ccc;border-radius:10px">
+    <div style="margin-top:8px">
+      <button class="btn" id="y1">A. youtube.com 플레이어</button>
+      <button class="btn" id="y2">B. nocookie 플레이어</button>
+      <button class="btn gray" id="y3">C. YouTube에서 열기(새 창)</button>
+      <button class="btn red" id="y0">닫기</button>
+    </div>
+    <div id="ybox" style="position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:10px;overflow:hidden;display:none;margin-top:8px"></div>
+    <div id="ystat" style="font-size:14px;margin-top:6px;color:#444"></div>
+  </div>
+  <script>
+  (function () {
+    function $(i) { return document.getElementById(i); }
+    // 이 기기가 지원하는 영상 형식
+    var v = document.createElement('video'), rows = '';
+    function cp(t) { try { return v.canPlayType ? (v.canPlayType(t) || '아니오') : '(없음)'; } catch (e) { return '오류'; } }
+    rows += '<tr><td>video 태그</td><td>' + (v.canPlayType ? '지원' : '없음') + '</td></tr>';
+    rows += '<tr><td>MP4 (H.264+AAC)</td><td>' + cp('video/mp4; codecs="avc1.42E01E, mp4a.40.2"') + '</td></tr>';
+    rows += '<tr><td>HLS (m3u8)</td><td>' + cp('application/vnd.apple.mpegurl') + '</td></tr>';
+    rows += '<tr><td>WebM</td><td>' + cp('video/webm; codecs="vp8, vorbis"') + '</td></tr>';
+    $('vinfo').innerHTML = rows;
+
+    function vid(u) {
+      u = (u || '').replace(/^\s+|\s+$/g, '');
+      if (/^[\w-]{11}$/.test(u)) return u;
+      var m = u.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/))([\w-]{11})/);
+      return m ? m[1] : null;
+    }
+    var t0 = 0;
+    function open(host) {
+      var id = vid($('yid').value);
+      if (!id) { $('ystat').textContent = '영상 주소를 확인하세요'; return; }
+      var box = $('ybox'); box.style.display = 'block'; box.innerHTML = '';
+      var f = document.createElement('iframe');
+      f.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;border:0';
+      f.setAttribute('allowfullscreen', ''); f.setAttribute('allow', 'autoplay; encrypted-media; fullscreen');
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      t0 = new Date().getTime();
+      $('ystat').textContent = host + ' 플레이어를 여는 중... (최대 1분 걸릴 수 있어요)';
+      f.onload = function () { $('ystat').textContent = host + ' 플레이어 화면이 열렸어요 (' + Math.round((new Date().getTime() - t0) / 100) / 10 + '초). 재생 버튼을 눌러 영상이 나오는지 확인하세요.'; };
+      f.src = 'https://' + host + '/embed/' + id + '?playsinline=1&rel=0&modestbranding=1';
+      box.appendChild(f);
+    }
+    $('y1').onclick = function () { open('www.youtube.com'); };
+    $('y2').onclick = function () { open('www.youtube-nocookie.com'); };
+    $('y3').onclick = function () { var id = vid($('yid').value); if (id) window.open('https://www.youtube.com/watch?v=' + id, '_blank'); };
+    $('y0').onclick = function () { $('ybox').innerHTML = ''; $('ybox').style.display = 'none'; $('ystat').textContent = ''; };
+  })();
+  </script>
+
   <h2>이모지 크기 시험</h2>
   <p style="font-size:14px;color:#666">🐹이 회색 칸(150px)을 꽉 채우는 방식이 어느 것인지 알려 주세요.</p>
 

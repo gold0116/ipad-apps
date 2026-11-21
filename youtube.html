@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>내 유튜브</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  h2 { font-size: 18px; margin: 20px 0 8px; border-left: 5px solid #2f6fed; padding-left: 8px; }
+  .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+  input[type=text], select { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+  #box { position: relative; width: 100%; padding-top: 56.25%; background: #000; border-radius: 10px; overflow: hidden; display: none; }
+  #box iframe { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 0; }
+  #list { list-style: none; margin: 0; padding: 0; }
+  #list li { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; overflow: hidden; }
+  #list li.on { background: #2f6fed; color: #fff; }
+  #list .nm { font-size: 17px; font-weight: bold; word-break: break-all; }
+  #list .sub { font-size: 12px; opacity: .7; margin: 2px 0 8px; }
+  #list .btn { padding: 8px 14px; font-size: 15px; margin: 2px 4px 2px 0; }
+  .small { font-size: 13px; color: #777; }
+  .ok { color: #1a7f3c; } .warn { color: #c33; }
+  a.lnk { display: inline-block; padding: 8px 14px; font-size: 15px; color: inherit; border: 1px solid #aaa; border-radius: 12px; margin: 2px 4px 2px 0; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 내 유튜브</div>
+<div class="wrap">
+
+  <div class="card">
+    <div id="now" style="font-size:16px;font-weight:bold;margin-bottom:8px">재생할 영상을 고르세요</div>
+    <div id="box"></div>
+    <div style="margin-top:8px"><button class="btn red" id="stop" style="padding:8px 16px;font-size:15px">정지(플레이어 닫기)</button>
+      <span class="small">플레이어 서버</span>
+      <select id="srv" style="width:auto;display:inline-block;padding:6px;font-size:15px"><option value="www.youtube.com">youtube.com</option><option value="www.youtube-nocookie.com">youtube-nocookie.com</option></select></div>
+    <div id="hint" class="small" style="margin-top:6px">구형 기기에서는 플레이어가 느리거나 안 열릴 수 있어요. 안 되면 서버를 바꿔 보거나 "YouTube에서 열기"를 쓰세요.</div>
+  </div>
+
+  <h2>영상 목록</h2>
+  <ul id="list"></ul>
+  <p id="empty" class="small" style="display:none">저장된 영상이 없어요. 아래에서 유튜브 주소를 추가하세요.</p>
+
+  <h2>영상 추가</h2>
+  <div class="card">
+    <p class="small" style="margin:0 0 4px">이름</p>
+    <input type="text" id="nm" placeholder="예: 좋아하는 노래">
+    <p class="small" style="margin:10px 0 4px">유튜브 주소</p>
+    <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=... 또는 https://youtu.be/...">
+    <div style="margin-top:8px"><button class="btn" id="save">저장</button> <button class="btn gray" id="try">바로 재생</button></div>
+    <div id="msg" style="margin-top:6px"></div>
+  </div>
+  <div class="card" style="margin-top:8px">
+    <b>작동 시험</b>
+    <p class="small" style="margin:4px 0 8px">이 기기에서 유튜브 플레이어가 열리는지 확인해 보세요. (유튜브의 첫 영상으로 시험해요)</p>
+    <button class="btn gray" id="test">시험 영상 열기</button>
+  </div>
+
+  <p class="small" style="margin-top:16px">유튜브 공식 임베드 플레이어를 그대로 열어요. 영상은 유튜브에서 직접 재생되고 이 앱은 주소 목록만 이 기기에 저장해요(GitHub에 올라가지 않아요). 인터넷이 필요하고, 영상에 따라 퍼가기가 막혀 있으면 재생되지 않아요.</p>
+</div>
+<script>
+(function () {
+  var KEY = 'myyoutube-list-v1', SKEY = 'myyoutubeServer';
+  var list = [], playingId = null;
+  function $(i) { return document.getElementById(i); }
+  function load() { try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { list = []; } }
+  function store() { try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch (e) { say('저장할 수 없어요(저장 공간 부족 등)', true); return false; } }
+  function say(t, err) { $('msg').className = err ? 'warn' : 'ok'; $('msg').textContent = t; }
+  try { var sv = localStorage.getItem(SKEY); if (sv) $('srv').value = sv; } catch (e) {}
+
+  function videoId(u) {
+    u = (u || '').replace(/^\s+|\s+$/g, '');
+    if (/^[\w-]{11}$/.test(u)) return u;
+    var m = u.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|embed\/|shorts\/|live\/|v\/))([\w-]{11})/);
+    return m ? m[1] : null;
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+  function openPlayer(vid, name, key) {
+    var host = $('srv').value;
+    var src = 'https://' + host + '/embed/' + vid + '?playsinline=1&rel=0&modestbranding=1&autoplay=1';
+    var box = $('box'); box.style.display = 'block'; box.innerHTML = '';
+    var f = document.createElement('iframe');
+    f.setAttribute('allowfullscreen', ''); f.setAttribute('allow', 'autoplay; encrypted-media; fullscreen');
+    f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    f.src = src; box.appendChild(f);
+    playingId = key; $('now').textContent = '재생 중: ' + name;
+    $('hint').innerHTML = '화면이 비어 있거나 오류가 나면 "플레이어 서버"를 바꿔 보세요. 그래도 안 되면 <a href="https://www.youtube.com/watch?v=' + vid + '" target="_blank" style="color:#2f6fed">YouTube에서 열기</a>를 눌러 보세요.';
+    render();
+  }
+  function stop() { $('box').innerHTML = ''; $('box').style.display = 'none'; playingId = null; $('now').textContent = '재생할 영상을 고르세요'; render(); }
+
+  function render() {
+    var ul = $('list'); ul.innerHTML = '';
+    $('empty').style.display = list.length ? 'none' : 'block';
+    for (var i = 0; i < list.length; i++) (function (s) {
+      var li = document.createElement('li'); li.className = s.id === playingId ? 'on' : '';
+      li.innerHTML = '<div class="nm">' + esc(s.name) + '</div><div class="sub">' + esc(s.vid) + '</div>';
+      var bp = document.createElement('button'); bp.className = 'btn'; bp.textContent = '재생'; bp.onclick = function () { openPlayer(s.vid, s.name, s.id); window.scrollTo(0, 0); };
+      var ba = document.createElement('a'); ba.className = 'lnk'; ba.textContent = 'YouTube에서 열기'; ba.href = 'https://www.youtube.com/watch?v=' + s.vid; ba.target = '_blank';
+      var bd = document.createElement('button'); bd.className = 'btn gray'; bd.textContent = '삭제';
+      bd.onclick = function () {
+        if (!confirm('"' + s.name + '"을(를) 삭제할까요?')) return;
+        if (playingId === s.id) stop();
+        for (var k = 0; k < list.length; k++) if (list[k].id === s.id) { list.splice(k, 1); break; }
+        store(); render();
+      };
+      li.appendChild(bp); li.appendChild(ba); li.appendChild(bd); ul.appendChild(li);
+    })(list[i]);
+  }
+
+  $('stop').onclick = stop;
+  $('srv').onchange = function () { try { localStorage.setItem(SKEY, this.value); } catch (e) {} };
+  $('save').onclick = function () {
+    var v = videoId($('url').value);
+    if (!v) { say('유튜브 주소가 아니에요. watch?v=… 또는 youtu.be/… 주소를 넣으세요.', true); return; }
+    var name = $('nm').value.replace(/^\s+|\s+$/g, '') || ('영상 ' + v);
+    list.push({ id: 'y' + new Date().getTime(), name: name, vid: v });
+    if (!store()) { list.pop(); return; }
+    $('nm').value = ''; $('url').value = ''; say('"' + name + '" 저장했어요', false); render();
+  };
+  $('try').onclick = function () {
+    var v = videoId($('url').value);
+    if (!v) { say('유튜브 주소가 아니에요', true); return; }
+    openPlayer(v, $('nm').value || ('영상 ' + v), null); window.scrollTo(0, 0);
+  };
+  $('test').onclick = function () { openPlayer('jNQXAC9IVRw', '시험 영상', null); window.scrollTo(0, 0); };
+
+  load(); render();
+})();
+</script>
+</body>
+</html>
