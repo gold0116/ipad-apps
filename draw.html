@@ -65,7 +65,7 @@ body.rp #rbar { display: block; }
 </head>
 <body>
 <div id="bar">
-  <a class="b" id="bHome" data-act="home">‹ 작품</a><span class="b off" id="bUndo" data-act="undo">취소</span><span class="b off" id="bRedo" data-act="redo">다시</span><span class="b" data-act="clear">전체 지움</span><span id="sizebox"><canvas id="szc" width="44" height="44"></canvas><input type="range" id="sz" min="1" max="80" value="6"><span id="szl">6</span></span><span class="slb">투명도<input type="range" id="al" min="5" max="100" value="100"><span id="all">100%</span></span><span id="fillopt" style="display:none"><span style="font-size:15px;margin-left:4px">채우기 감도</span><span class="b" data-act="fs" data-v="0">낮음</span><span class="b on" data-act="fs" data-v="1">보통</span><span class="b" data-act="fs" data-v="2">높음</span></span><span class="b" id="bHand" data-act="hand">손 이동</span><span class="b" data-act="fit">전체 보기</span><span class="b" data-act="upright">똑바로</span><span class="b" data-act="z100">100%</span><span class="b" id="zl" style="background:none;padding:0 4px">100%</span><span class="b" data-act="replay">다시보기 ▶</span><span class="b" data-act="img">이미지</span>
+  <a class="b" id="bHome" data-act="home">‹ 작품</a><span class="b off" id="bUndo" data-act="undo">취소</span><span class="b off" id="bRedo" data-act="redo">다시</span><span class="b" data-act="clear">전체 지움</span><span id="sizebox"><canvas id="szc" width="44" height="44"></canvas><input type="range" id="sz" min="1" max="80" value="6"><span id="szl">6</span></span><span class="slb">투명도<input type="range" id="al" min="5" max="100" value="100"><span id="all">100%</span></span><span id="fillopt" style="display:none"><span style="font-size:15px;margin-left:4px">채우기 감도</span><span class="b" data-act="fs" data-v="0">낮음</span><span class="b on" data-act="fs" data-v="1">보통</span><span class="b" data-act="fs" data-v="2">높음</span></span><span class="b" id="bHand" data-act="hand">손 이동</span><span class="b" data-act="fit">전체 보기</span><span class="b" data-act="upright">똑바로</span><span class="b" data-act="z100">100%</span><span class="b" id="zl" style="background:none;padding:0 4px">100%</span><span class="b" data-act="replay">다시보기 ▶</span><span class="b" data-act="img">이미지</span><span class="b" data-act="send">PC로 보내기</span>
 </div>
 <div id="side" class="scrl"></div>
 <div id="stage"><canvas id="view" width="10" height="10"></canvas><div id="hud"></div><div id="sv"></div></div>
@@ -79,10 +79,17 @@ body.rp #rbar { display: block; }
 
 <div id="home">
   <div class="hd"><a href="index.html">‹ 홈</a> 그림판</div>
-  <div style="padding:12px 16px 0"><span class="b big" data-act="newdlg">새 그림 그리기</span></div>
+  <div style="padding:12px 16px 0"><span class="b big" data-act="newdlg">새 그림 그리기</span><span class="b big gray" data-act="pcdlg">PC에서 가져오기</span></div>
   <div id="gal"></div>
   <p style="color:#888;font-size:14px;padding:0 16px 24px">그림은 이 아이패드 안에 저장돼요. 그리는 동안 자동으로 저장하고, 나중에 열어서 "다시보기"로 처음부터 그려지는 과정을 볼 수 있어요. 다른 기기로는 옮겨지지 않으니, 마음에 드는 그림은 "이미지"로 사진 앱에 저장해 두세요.</p>
 </div>
+
+<div class="ov" id="pcov" style="z-index:35"><div class="card scrl">
+  <h2>PC에서 가져오기</h2>
+  <p>PC(노트북 서버)로 보낸 그림 목록이에요. "가져오기"를 누르면 이 기기의 작품 목록에 들어와요.</p>
+  <div id="pclist"></div>
+  <div style="text-align:right"><span class="b big" data-act="pcclose">닫기</span></div>
+</div></div>
 
 <div class="ov" id="newov"><div class="card scrl">
   <h2>새 그림</h2>
@@ -788,15 +795,82 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   }
 
   /* ---------- 이미지 내보내기 ---------- */
-  function exportImg() {
+  function makeImg() {
     flushRebuild();
-    var c = docCv, tmp = null, w = W, h = H;
+    var c = docCv, tmp = null, w = W, h = H, u = '', ext = 'png';
     if (W * H > 6000000) { var f = Math.sqrt(3000000 / (W * H)); w = Math.round(W * f); h = Math.round(H * f); tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h; tmp.getContext('2d').drawImage(docCv, 0, 0, w, h); c = tmp; }
-    var u = '';
-    try { u = (w * h > 2000000) ? c.toDataURL('image/jpeg', 0.92) : c.toDataURL('image/png'); } catch (e) { u = ''; }
+    try { if (w * h > 2000000) { u = c.toDataURL('image/jpeg', 0.92); ext = 'jpg'; } else u = c.toDataURL('image/png'); } catch (e) { u = ''; }
     if (tmp) tmp.width = tmp.height = 0;
-    if (!u) { alert('이미지를 만들지 못했어요(그림이 너무 커요).'); return; }
-    $('outimg').src = u; $('imgov').style.display = 'block';
+    return u ? { url: u, ext: ext } : null;
+  }
+  function exportImg() {
+    var r = makeImg();
+    if (!r) { alert('이미지를 만들지 못했어요(그림이 너무 커요).'); return; }
+    $('outimg').src = r.url; $('imgov').style.display = 'block';
+  }
+
+  /* ---------- PC(노트북 서버)로 보내기 / 가져오기 ---------- */
+  function xhr(method, url, body, done) {
+    var x = new XMLHttpRequest();
+    x.open(method, url, true); x.timeout = 60000;
+    x.onload = function () { done(x.status, x.responseText); };
+    x.onerror = function () { done(0, ''); }; x.ontimeout = function () { done(0, ''); };
+    try { x.send(body || null); } catch (e) { done(0, ''); }
+  }
+  function pcOk() {
+    if (location.protocol !== 'http:') { alert('이 주소로는 PC에 보낼 수 없어요.\n노트북 서버 주소(http://…:8081/draw.html)로 그림판을 열어서 사용하세요.'); return false; }
+    return true;
+  }
+  function sendToPC() {
+    if (!doc || !pcOk()) return;
+    flushRebuild(); dirtySave = true; saveNow();
+    doc.ops = ops; doc.T = TT;
+    var im = makeImg();
+    if (!im) { alert('이미지를 만들지 못했어요.'); return; }
+    var meta = JSON.stringify({ id: doc.id, w: W, h: H, upd: +new Date(), n: ops.length, ext: im.ext, thumb: thumbOf() });
+    hud('PC로 보내는 중…');
+    xhr('POST', '/api/drawsave', meta + '\n' + JSON.stringify(doc) + '\n' + im.url, function (st, txt) {
+      if (st === 200) hud('PC로 보냈어요 (C:\\ws\\midi\\drawings)', 4000);
+      else { hud(''); alert(st === 0 ? 'PC에 연결하지 못했어요. 노트북 서버가 켜져 있는지, 같은 와이파이인지 확인하세요.' : '보내지 못했어요: ' + txt); }
+    });
+  }
+  var pcList = [];
+  function openPC() {
+    if (!pcOk()) return;
+    $('pcov').style.display = 'block'; $('pclist').textContent = '불러오는 중…';
+    xhr('GET', '/api/drawings', null, function (st, txt) {
+      var a = null;
+      if (st === 200) { try { a = JSON.parse(txt); } catch (e) { a = null; } }
+      if (!a) { $('pclist').textContent = st === 0 ? 'PC에 연결하지 못했어요.' : '목록을 불러오지 못했어요.'; return; }
+      pcList = [];
+      var h = '';
+      for (var i = 0; i < a.length; i++) {
+        var e = a[i];
+        if (!e || !/^[A-Za-z0-9_-]+$/.test(String(e.id))) continue;
+        pcList.push(e);
+        h += '<div class="gc"><img src="' + (String(e.thumb || '').indexOf('data:image/') === 0 ? e.thumb : '') + '" alt=""><div>' + fmtDate(+e.upd || 0) + '<br>' + (+e.w) + '×' + (+e.h) + ' · 획 ' + (+e.n || 0) + '</div><span class="b" data-act="pcget" data-id="' + e.id + '">가져오기</span></div>';
+      }
+      $('pclist').innerHTML = h || '<p style="color:#666">PC에 보낸 그림이 아직 없어요.</p>';
+    });
+  }
+  function getFromPC(id) {
+    var e = null; for (var i = 0; i < pcList.length; i++) if (pcList[i].id === id) e = pcList[i];
+    if (!e) return;
+    $('pclist').innerHTML = '<p>가져오는 중…</p>';
+    xhr('GET', '/drawings/' + id + '.json', null, function (st, txt) {
+      var d = null; try { d = JSON.parse(txt); } catch (e2) { d = null; }
+      if (st !== 200 || !d || !d.ops || !(d.W >= 64 && d.W <= 3072 && d.H >= 64 && d.H <= 2304) || typeof d.paper !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(d.paper)) { $('pcov').style.display = 'none'; alert('그림을 가져오지 못했어요.'); return; }
+      var nid = d.id;
+      if (!/^[A-Za-z0-9_-]+$/.test(String(nid))) nid = 'd' + (+new Date());
+      var copied = false;
+      try { if (localStorage.getItem('_draw_' + nid)) { nid = 'd' + (+new Date()); copied = true; } } catch (e3) {}
+      d.id = nid; if (!d.views) d.views = [];
+      try { localStorage.setItem('_draw_' + nid, JSON.stringify(d)); } catch (e4) { alert('저장 공간이 부족해서 가져오지 못했어요.'); return; }
+      var idx = loadIdx(); idx.push({ id: nid, w: d.W, h: d.H, paper: d.paper, upd: +e.upd || +new Date(), thumb: String(e.thumb || '').indexOf('data:image/') === 0 ? e.thumb : '', n: d.ops.length });
+      saveIdx(idx); renderHome();
+      $('pcov').style.display = 'none';
+      alert(copied ? '가져왔어요. (이 기기에 같은 그림이 있어서 사본으로 넣었어요)' : '가져왔어요. 작품 목록에서 열어 보세요.');
+    });
   }
 
   /* ---------- 다시보기 ---------- */
@@ -950,6 +1024,10 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     else if (k === 'z100') { setZoomAround(1, vw / 2, vh / 2); recView(true); markFull(); }
     else if (k === 'replay') { if (mode === 'none') startReplay(); }
     else if (k === 'img') exportImg();
+    else if (k === 'send') sendToPC();
+    else if (k === 'pcdlg') openPC();
+    else if (k === 'pcclose') $('pcov').style.display = 'none';
+    else if (k === 'pcget') getFromPC(act.getAttribute('data-id'));
     else if (k === 'imgclose') { $('imgov').style.display = 'none'; $('outimg').src = ''; }
     else if (k === 'newdlg') { newW = 1; newH = 1; newPaper = '#ffffff'; segSet('segW', 1); segSet('segH', 1); buildPapers(); updNewInfo(); $('newov').style.display = 'block'; }
     else if (k === 'newcancel') $('newov').style.display = 'none';
