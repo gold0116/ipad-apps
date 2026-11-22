@@ -121,6 +121,42 @@
     <div style="font-size:50px">50px 가 🐹</div>
     <div style="font-size:100px;line-height:110px">100px 가 🐹</div></div>
 
+  <h2>그림판 시험</h2>
+  <p style="font-size:14px;color:#666">아래 회색 칸을 <b>손가락 1~3개로 동시에 짚고 움직여</b> 보세요. 동시에 인식된 손가락 수와 가장 많았던 수가 나와요. 그림판의 두 손가락 확대·이동은 2개 이상이 인식돼야 해요.</p>
+  <div class="row"><div class="lb">O. 터치 수 시험</div>
+    <canvas id="tcv" width="300" height="130" style="background:#d9dce2;border-radius:8px;display:block"></canvas>
+    <div id="tinfo" style="font-size:16px;margin-top:6px">지금 0개 · 최대 0개</div></div>
+  <div class="row"><div class="lb">P. 그림판 기능 지원</div>
+    <button class="btn gray" id="pbtn">검사하기</button>
+    <div id="pinfo" style="font-size:15px;margin-top:6px;line-height:1.6"></div></div>
+  <script>
+    (function () {
+      var c = document.getElementById('tcv'), x = c.getContext('2d'), mx = 0, info = document.getElementById('tinfo');
+      function draw(e) {
+        e.preventDefault();
+        var t = e.touches, r = c.getBoundingClientRect(), i;
+        if (t.length > mx) mx = t.length;
+        x.clearRect(0, 0, 300, 130);
+        for (i = 0; i < t.length; i++) { x.fillStyle = ['#e5484d', '#2f6fed', '#2a9d4b', '#ff7a1a', '#7e57c2'][i % 5]; x.beginPath(); x.arc(t[i].clientX - r.left, t[i].clientY - r.top, 22, 0, 6.2832); x.fill(); }
+        info.textContent = '지금 ' + t.length + '개 · 최대 ' + mx + '개';
+      }
+      c.addEventListener('touchstart', draw, false); c.addEventListener('touchmove', draw, false); c.addEventListener('touchend', draw, false);
+      document.getElementById('pbtn').addEventListener('click', function () {
+        var o = [], t0, big, bx, blend;
+        try { var h = document.createElement('canvas').getContext('2d'); h.globalCompositeOperation = 'darken'; blend = h.globalCompositeOperation === 'darken'; o.push('형광펜 겹침(darken): ' + (blend ? '지원' : '미지원(반투명으로 대신 그림)')); } catch (e) { o.push('darken 검사 오류: ' + e.message); }
+        try {
+          t0 = +new Date(); big = document.createElement('canvas'); big.width = 3072; big.height = 2304; bx = big.getContext('2d'); bx.fillStyle = '#fff'; bx.fillRect(0, 0, 3072, 2304);
+          var d = bx.getImageData(3000, 2200, 1, 1).data; o.push('큰 도화지 3072×2304: 만들기 성공(' + (+new Date() - t0) + 'ms, 픽셀 ' + d[0] + ')');
+          t0 = +new Date(); bx.fillStyle = '#c00'; for (var i = 0; i < 200; i++) { bx.beginPath(); bx.moveTo(10 + i * 3, 10); bx.quadraticCurveTo(300, 800 + i, 3000, 2000); bx.lineWidth = 6; bx.stroke(); }
+          o.push('곡선 200개 그리기: ' + (+new Date() - t0) + 'ms');
+          big.width = big.height = 0;
+        } catch (e) { o.push('큰 도화지 오류: ' + e.message + ' → 그림판에서 2배 이하 크기를 쓰세요'); }
+        try { var ls = 'x', n = 0; localStorage.setItem('_t_probe', ls); var s = new Array(1024 * 100).join('가'); localStorage.setItem('_t_probe', s); n = s.length; localStorage.removeItem('_t_probe'); o.push('저장 공간: 약 ' + Math.round(n / 1000) + 'K 글자 이상 가능'); } catch (e) { try { localStorage.removeItem('_t_probe'); } catch (e2) {} o.push('저장 공간: 200K 글자 저장 실패(여유가 적어요)'); }
+        document.getElementById('pinfo').innerHTML = o.join('<br>');
+      }, false);
+    })();
+  </script>
+
   <h2>한자 글꼴 시험 (장기 기물)</h2>
   <p style="font-size:14px;color:#666">장기 기물에 쓰는 한자예요. 네모(□)나 빈칸 없이 <b>글자 모양</b>으로 모두 보이면 장기에서 "한자"를 쓸 수 있어요. 아래 두 줄 모두 확인해 주세요.</p>
   <div class="row"><div class="lb">M. 일반 글자 (초: 楚 卒 / 한: 漢 兵 / 공통: 象 馬 車 包 士)</div>
