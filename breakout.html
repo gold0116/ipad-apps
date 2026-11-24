@@ -108,7 +108,7 @@
   var effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 };
   try { best = parseInt(localStorage.getItem('bestBreakout') || '0', 10) || 0; } catch (e) {}
 
-  function makeBall(x, y, vx, vy) { return { x: x, y: y, vx: vx, vy: vy, r: 5, stuck: false, trail: [] }; }
+  function makeBall(x, y, vx, vy) { return { x: x, y: y, vx: vx, vy: vy, r: 5, stuck: false, trail: [], unstuckT: 600, lastUX: x, lastUY: y }; }
 
   function charToBrick(ch, r, c) {
     var x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
@@ -269,7 +269,11 @@
         if (!through) {
           var ox = Math.min(nx + ball.r - b.x, b.x + BW - (nx - ball.r));
           var oy = Math.min(ny + ball.r - b.y, b.y + BH - (ny - ball.r));
-          if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
+          // 거의 정확히 모서리에 맞으면(ox,oy가 비슷하면) 한 축만 뒤집지 않고 둘 다
+          // 뒤집는다. 한 축만 뒤집으면 모서리(특히 강철 벽돌 사이 좁은 틈)에서
+          // 공이 좌우/상하로 왔다갔다만 하며 제자리에 박히는 경우가 있었음.
+          if (Math.abs(ox - oy) < 1.5) { ball.vx = -ball.vx; ball.vy = -ball.vy; }
+          else if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
         }
         if (!isSteel) {
           b.hp--;
@@ -283,6 +287,17 @@
     ball.x = nx; ball.y = ny;
     ball.trail.push({ x: nx, y: ny, life: 1 }); if (ball.trail.length > 8) ball.trail.shift();
     for (var ti = 0; ti < ball.trail.length; ti++) ball.trail[ti].life -= 0.12;
+    // 안전망: 그래도 모서리에 박혀 거의 안 움직이는 경우를 대비해, 0.6초마다
+    // 실제로 움직인 거리를 확인하고 너무 적으면 방향을 랜덤하게 틀어서 빼낸다
+    ball.unstuckT -= dt;
+    if (ball.unstuckT <= 0) {
+      if (Math.abs(ball.x - ball.lastUX) + Math.abs(ball.y - ball.lastUY) < 8) {
+        var sp2 = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy) || (0.19 + stage * 0.015);
+        var ang = Math.atan2(ball.vy, ball.vx) + (0.6 + Math.random() * 1.2) * (Math.random() < 0.5 ? -1 : 1);
+        ball.vx = Math.cos(ang) * sp2; ball.vy = Math.sin(ang) * sp2;
+      }
+      ball.lastUX = ball.x; ball.lastUY = ball.y; ball.unstuckT = 600;
+    }
     if (ball.y > H + 10) return false;
     return true;
   }
