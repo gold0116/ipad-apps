@@ -13,15 +13,18 @@
   #msg { text-align: center; font-size: 20px; font-weight: bold; min-height: 30px; margin-top: 8px; }
   .pad { text-align: center; margin-top: 8px; }
   .pad select { font-size: 16px; padding: 2px; }
+  #lvPad { margin-bottom: 8px; }
+  #lvPad select { font-size: 15px; padding: 3px; margin: 0 3px; }
 </style>
 </head>
 <body>
 <div class="top"><a href="index.html">‹ 홈</a> 러시아워</div>
 <div class="wrap">
-  <div id="info">이동 <b id="mv">0</b> · 최고 <b id="best">-</b> · 레벨 <select id="lvSel"></select></div>
+  <div id="info">이동 <b id="mv">0</b> · 최고 <b id="best">-</b></div>
+  <div class="pad" id="lvPad"><select id="diffSel"></select><select id="numSel"></select></div>
   <canvas id="cv" width="240" height="240"></canvas>
   <div id="msg"></div>
-  <div class="pad"><button class="btn gray" id="re">다시 시작</button></div>
+  <div class="pad"><button class="btn gray" id="re">다시 시작</button> <button class="btn" id="unsolved">미완료 레벨 시작</button></div>
   <p style="text-align:center;color:#888">빨간 차를 끌어서 오른쪽 틈(노란 표시)으로 빼내세요. 차는 자기 방향으로만 밀 수 있어요.</p>
 </div>
 <script>
@@ -191,10 +194,11 @@
     done = true;
     SFX.play('win');
     celebrate();
-    var key = 'bestRush' + curLevel, best = 0;
+    var key = 'bestRush' + curLevel, best = 0, wasSolved = isSolved(curLevel);
     try { best = parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch (e) {}
     if (!best || moves < best) { best = moves; try { localStorage.setItem(key, best); } catch (e) {} }
     $('best').textContent = best;
+    if (!wasSolved) { markNumOptionSolved(curLevel); updateDiffCounts(); }
     var opt = LEVELS[curLevel].opt;
     var html = '🎉 탈출 성공! ' + moves + '번 이동';
     if (opt) html += (moves === opt ? ' (최적!)' : ' (최적 ' + opt + '번)');
@@ -203,6 +207,10 @@
     $('msg').innerHTML = html;
     var nb = $('nextLv');
     if (nb) nb.onclick = function () { loadLevel(curLevel + 1); };
+  }
+
+  function isSolved(idx) {
+    try { return !!localStorage.getItem('bestRush' + idx); } catch (e) { return false; }
   }
 
   function loadLevel(idx) {
@@ -220,7 +228,7 @@
     try { best = parseInt(localStorage.getItem('bestRush' + idx) || '0', 10) || 0; } catch (e) {}
     $('best').textContent = best ? best : '-';
     $('msg').textContent = '';
-    $('lvSel').value = idx;
+    syncSelectsToLevel(idx);
     draw();
   }
 
@@ -293,23 +301,83 @@
   window.addEventListener('orientationchange', layout, false);
   layout();
 
+  // 레벨이 338개라 하나의 드롭다운에 다 넣으면 스크롤하기 힘들어서, 난이도
+  // 선택(diffSel)과 그 난이도 안에서의 번호 선택(numSel)을 분리했다.
+  var diffOrder = [], groupsByDiff = {};
+
   function buildLevelSelect() {
-    var sel = $('lvSel'), groups = {}, counters = {}, i, key, label, g, o;
-    sel.innerHTML = '';
+    var diffSel = $('diffSel'), i, key, label, o;
+    diffSel.innerHTML = '';
+    diffOrder = []; groupsByDiff = {};
     for (i = 0; i < LEVELS.length; i++) {
       key = LEVELS[i].diff || (LEVELS[i].w + '×' + LEVELS[i].h);
-      label = DIFF_LABEL[key] || key;
-      if (!groups[key]) { g = document.createElement('optgroup'); g.label = label; sel.appendChild(g); groups[key] = g; counters[key] = 0; }
-      counters[key]++;
-      o = document.createElement('option');
-      o.value = i;
-      o.textContent = label + ' ' + counters[key];
-      groups[key].appendChild(o);
+      if (!groupsByDiff[key]) { groupsByDiff[key] = []; diffOrder.push(key); }
+      groupsByDiff[key].push(i);
     }
-    sel.onchange = function () { loadLevel(parseInt(sel.value, 10)); };
+    for (i = 0; i < diffOrder.length; i++) {
+      key = diffOrder[i]; label = DIFF_LABEL[key] || key;
+      o = document.createElement('option');
+      o.value = key; o.setAttribute('data-label', label);
+      diffSel.appendChild(o);
+    }
+    updateDiffCounts();
+    diffSel.onchange = function () {
+      populateNumSel(diffSel.value);
+      loadLevel(groupsByDiff[diffSel.value][0]);
+    };
+  }
+
+  function updateDiffCounts() {
+    var diffSel = $('diffSel'), i, key, idxs, solvedN, j;
+    for (i = 0; i < diffSel.options.length; i++) {
+      key = diffSel.options[i].value;
+      idxs = groupsByDiff[key]; solvedN = 0;
+      for (j = 0; j < idxs.length; j++) if (isSolved(idxs[j])) solvedN++;
+      diffSel.options[i].textContent = diffSel.options[i].getAttribute('data-label') + ' (' + solvedN + '/' + idxs.length + ')';
+    }
+  }
+
+  function populateNumSel(diffKey) {
+    var numSel = $('numSel'), idxs = groupsByDiff[diffKey] || [], i, o;
+    numSel.innerHTML = '';
+    for (i = 0; i < idxs.length; i++) {
+      o = document.createElement('option');
+      o.value = idxs[i];
+      o.textContent = (i + 1) + (isSolved(idxs[i]) ? ' ✓' : '');
+      numSel.appendChild(o);
+    }
+    numSel.onchange = function () { loadLevel(parseInt(numSel.value, 10)); };
+  }
+
+  function markNumOptionSolved(idx) {
+    var numSel = $('numSel');
+    for (var i = 0; i < numSel.options.length; i++) {
+      if (parseInt(numSel.options[i].value, 10) === idx && numSel.options[i].textContent.indexOf('✓') === -1) {
+        numSel.options[i].textContent += ' ✓';
+        break;
+      }
+    }
+  }
+
+  function syncSelectsToLevel(idx) {
+    var diffKey = LEVELS[idx].diff || (LEVELS[idx].w + '×' + LEVELS[idx].h);
+    if ($('diffSel').value !== diffKey) {
+      $('diffSel').value = diffKey;
+      populateNumSel(diffKey);
+    }
+    $('numSel').value = idx;
   }
 
   $('re').onclick = function () { loadLevel(curLevel); };
+  $('unsolved').onclick = function () {
+    var curDiff = $('diffSel').value, idxs = groupsByDiff[curDiff] || [], candidates = [], i;
+    for (i = 0; i < idxs.length; i++) if (!isSolved(idxs[i])) candidates.push(idxs[i]);
+    if (!candidates.length) {
+      for (i = 0; i < LEVELS.length; i++) if (!isSolved(i)) candidates.push(i);
+    }
+    if (!candidates.length) { $('msg').textContent = '🏆 338개 전부 깼어요!'; return; }
+    loadLevel(candidates[Math.floor(Math.random() * candidates.length)]);
+  };
 
   (function boot() {
     var xhr = new XMLHttpRequest();
@@ -319,6 +387,7 @@
       LEVELS = text ? parseLevelsText(text) : [];
       if (!LEVELS.length) { $('msg').textContent = '레벨 데이터를 불러오지 못했어요. 온라인 상태에서 한 번 열어 주세요.'; return; }
       buildLevelSelect();
+      populateNumSel(diffOrder[0]);
       loadLevel(0);
     };
     xhr.open('GET', LEVELS_URL, true);
