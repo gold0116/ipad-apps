@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>러시아워</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #info { text-align: center; font-size: 18px; margin: 4px 0 8px; }
+  #cv { display: block; margin: 0 auto; background: #1d2330; border-radius: 8px; touch-action: none; }
+  #msg { text-align: center; font-size: 20px; font-weight: bold; min-height: 30px; margin-top: 8px; }
+  .pad { text-align: center; margin-top: 8px; }
+  .pad select { font-size: 16px; padding: 2px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 러시아워</div>
+<div class="wrap">
+  <div id="info">이동 <b id="mv">0</b> · 최고 <b id="best">-</b> · 레벨 <select id="lvSel"></select></div>
+  <canvas id="cv" width="300" height="300"></canvas>
+  <div id="msg"></div>
+  <div class="pad"><button class="btn gray" id="re">다시 시작</button></div>
+  <p style="text-align:center;color:#888">빨간 차를 끌어서 오른쪽 틈(노란 표시)으로 빼내세요. 차는 자기 방향으로만 밀 수 있어요.</p>
+</div>
+<script>
+(function () {
+  var W = 6, H = 6, CELL = 50, CV = W * CELL;
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  function $(i) { return document.getElementById(i); }
+
+  // 참고: 색상/길이 데이터 형식(id,x,y,orientation,length)은 공개 러시아워 솔버
+  // (KaKariki02/rushHour)의 보드 CSV와 같은 꼴로 맞춰서, 그 저장소의 검증된
+  // 보드 배치를 그대로 가져다 쓸 수 있게 했다. 네 레벨 모두 BFS로 풀이 가능함을
+  // 확인했고(한 번 밀 때마다 지나가는 칸이 전부 비어 있어야 하는 실제 규칙대로
+  // 계산함), 최소 이동 수 기준으로 쉬운 것부터 배치함: 15 / 21 / 33 / 49번.
+  var PALETTE = ['#2f6fed', '#2a9d4a', '#f4a259', '#6b3fc4', '#17a2b8', '#e8b339', '#8a8f98', '#d9593a', '#4f9ba3', '#a86bd6'];
+
+  var LEVELS = [
+    { label: '1', data: "#,2,2,H,2\nA,2,0,H,2\nB,4,0,H,2\nC,1,1,H,2\nD,3,1,H,2\nE,0,3,H,2\nF,2,3,H,2\nG,4,2,V,2\nH,0,4,V,2\nI,3,4,V,2\nK,4,4,H,2\nL,4,5,H,2\nM,5,1,V,3" },
+    { label: '2', data: "#,0,2,H,2\nA,1,0,H,2\nB,3,0,H,3\nC,1,1,H,2\nD,3,1,V,2\nE,4,1,H,2\nF,2,2,V,2\nG,5,2,V,2\nH,0,3,H,2\nI,3,3,H,2\nJ,0,4,V,2\nK,2,4,V,2\nL,4,4,H,2" },
+    { label: '3', data: "#,3,2,H,2\nA,3,0,H,2\nB,4,3,H,2\nC,1,4,H,2\nD,4,5,H,2\nE,0,4,V,2\nO,2,0,V,3\nP,5,0,V,3\nQ,3,3,V,3" },
+    { label: '4 (최고난도)', data: "#,2,2,H,2\nA,0,0,H,3\nB,3,0,V,2\nC,4,0,V,3\nD,5,0,V,3\nE,0,1,V,2\nF,1,1,H,2\nG,0,3,H,2\nH,2,3,V,2\nI,1,4,V,2\nJ,4,4,H,2\nK,2,5,H,2\nL,4,5,H,2" }
+  ];
+
+  function parseLevel(s) {
+    var lines = s.split('\n'), out = [];
+    for (var i = 0; i < lines.length; i++) {
+      var p = lines[i].split(',');
+      out.push({ id: p[0], x: parseInt(p[1], 10), y: parseInt(p[2], 10), o: p[3], len: parseInt(p[4], 10) });
+    }
+    return out;
+  }
+
+  var vehicles, curLevel = 0, moves = 0, done = false, exitRow = 0, colorMap = {};
+  var dragIdx = -1, dragAxis = 'x', dragOrigPos = 0, dragLo = 0, dragHi = 0, dragStartClient = 0, isMouseDown = false;
+
+  function vehicleById(id) {
+    for (var i = 0; i < vehicles.length; i++) if (vehicles[i].id === id) return vehicles[i];
+    return null;
+  }
+  function assignColors() {
+    colorMap = {};
+    var n = 0;
+    for (var i = 0; i < vehicles.length; i++) {
+      if (vehicles[i].id === '#') continue;
+      colorMap[vehicles[i].id] = PALETTE[n % PALETTE.length];
+      n++;
+    }
+  }
+
+  function cellsOf(v, x, y) {
+    x = (x === undefined) ? v.x : x;
+    y = (y === undefined) ? v.y : y;
+    var out = [];
+    for (var k = 0; k < v.len; k++) out.push(v.o === 'H' ? [x + k, y] : [x, y + k]);
+    return out;
+  }
+  function occupancyExcept(skip) {
+    var occ = {}, i, k, c;
+    for (i = 0; i < vehicles.length; i++) {
+      if (i === skip) continue;
+      c = cellsOf(vehicles[i]);
+      for (k = 0; k < c.length; k++) occ[c[k][0] + ',' + c[k][1]] = true;
+    }
+    return occ;
+  }
+  function boundsFor(v, occ) {
+    var pos = v.o === 'H' ? v.x : v.y, lo = pos, hi = pos;
+    function free(p) {
+      var c = v.o === 'H' ? cellsOf(v, p, v.y) : cellsOf(v, v.x, p);
+      for (var k = 0; k < c.length; k++) {
+        var cx = c[k][0], cy = c[k][1];
+        if (cx < 0 || cx >= W || cy < 0 || cy >= H) return false;
+        if (occ[cx + ',' + cy]) return false;
+      }
+      return true;
+    }
+    while (free(lo - 1)) lo--;
+    while (free(hi + 1)) hi++;
+    return { lo: lo, hi: hi };
+  }
+  function vehicleAt(c, r) {
+    for (var i = 0; i < vehicles.length; i++) {
+      var cc = cellsOf(vehicles[i]);
+      for (var k = 0; k < cc.length; k++) if (cc[k][0] === c && cc[k][1] === r) return i;
+    }
+    return -1;
+  }
+
+  function roundRect(x, y, w, h, rad) {
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  }
+
+  function draw() {
+    var i;
+    ctx.clearRect(0, 0, CV, CV);
+    ctx.fillStyle = '#1d2330';
+    ctx.fillRect(0, 0, CV, CV);
+    ctx.strokeStyle = 'rgba(255,255,255,.08)';
+    ctx.lineWidth = 1;
+    for (i = 1; i < W; i++) {
+      ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, CV); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(CV, i * CELL); ctx.stroke();
+    }
+    ctx.fillStyle = '#ffd166';
+    ctx.fillRect(CV - 4, exitRow * CELL + 8, 4, CELL - 16);
+    for (i = 0; i < vehicles.length; i++) {
+      var v = vehicles[i];
+      var x = v.x * CELL, y = v.y * CELL;
+      var w = v.o === 'H' ? v.len * CELL : CELL;
+      var h = v.o === 'H' ? CELL : v.len * CELL;
+      ctx.fillStyle = v.id === '#' ? '#e5484d' : colorMap[v.id];
+      roundRect(x + 3, y + 3, w - 6, h - 6, 9);
+      ctx.fill();
+      if (i === dragIdx) {
+        ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 3;
+        roundRect(x + 3, y + 3, w - 6, h - 6, 9); ctx.stroke();
+      }
+    }
+  }
+
+  function celebrate() {
+    var r = cv.getBoundingClientRect();
+    var ey = (exitRow + 0.5) / H * r.height;
+    VFX.flash(cv, '255,209,102');
+    for (var n = 0; n < 6; n++) {
+      (function (n) {
+        setTimeout(function () {
+          VFX.burst(cv, r.width - 6, ey, { count: 14, speed: 2.8, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#e5484d'] });
+        }, n * 90);
+      })(n);
+    }
+  }
+
+  function checkWin() {
+    var red = vehicleById('#');
+    if (red.x + red.len !== W) return;
+    done = true;
+    SFX.play('win');
+    celebrate();
+    var key = 'bestRush' + curLevel, best = 0;
+    try { best = parseInt(localStorage.getItem(key) || '0', 10) || 0; } catch (e) {}
+    if (!best || moves < best) { best = moves; try { localStorage.setItem(key, best); } catch (e) {} }
+    $('best').textContent = best;
+    var html = '🎉 탈출 성공! ' + moves + '번 이동';
+    if (curLevel < LEVELS.length - 1) html += ' <button class="btn" id="nextLv">다음 레벨</button>';
+    else html += ' (전체 완료!)';
+    $('msg').innerHTML = html;
+    var nb = $('nextLv');
+    if (nb) nb.onclick = function () { loadLevel(curLevel + 1); };
+  }
+
+  function loadLevel(idx) {
+    if (idx < 0 || idx >= LEVELS.length) return;
+    curLevel = idx;
+    vehicles = parseLevel(LEVELS[idx].data);
+    exitRow = vehicleById('#').y;
+    assignColors();
+    moves = 0; done = false; dragIdx = -1;
+    $('mv').textContent = 0;
+    var best = 0;
+    try { best = parseInt(localStorage.getItem('bestRush' + idx) || '0', 10) || 0; } catch (e) {}
+    $('best').textContent = best ? best : '-';
+    $('msg').textContent = '';
+    $('lvSel').value = idx;
+    draw();
+  }
+
+  function localPos(e) {
+    var r = cv.getBoundingClientRect();
+    var t = e.touches && e.touches.length ? e.touches[0] : e;
+    return { x: (t.clientX - r.left) / r.width * CV, y: (t.clientY - r.top) / r.height * CV, clientX: t.clientX, clientY: t.clientY };
+  }
+
+  function start(e) {
+    if (done) return;
+    var p = localPos(e);
+    var c = Math.floor(p.x / CELL), r = Math.floor(p.y / CELL);
+    var idx = vehicleAt(c, r);
+    if (idx < 0) return;
+    dragIdx = idx;
+    var v = vehicles[idx];
+    dragAxis = v.o === 'H' ? 'x' : 'y';
+    dragOrigPos = v[dragAxis];
+    dragStartClient = dragAxis === 'x' ? p.clientX : p.clientY;
+    var b = boundsFor(v, occupancyExcept(idx));
+    dragLo = b.lo; dragHi = b.hi;
+    draw();
+  }
+  function move(e) {
+    if (dragIdx < 0) return;
+    var p = localPos(e);
+    var r = cv.getBoundingClientRect();
+    var client = dragAxis === 'x' ? p.clientX : p.clientY;
+    var scale = CV / (dragAxis === 'x' ? r.width : r.height);
+    var deltaCells = Math.round((client - dragStartClient) * scale / CELL);
+    var pos = dragOrigPos + deltaCells;
+    if (pos < dragLo) pos = dragLo;
+    if (pos > dragHi) pos = dragHi;
+    var v = vehicles[dragIdx];
+    if (pos !== v[dragAxis]) {
+      v[dragAxis] = pos;
+      SFX.play('move');
+      draw();
+    }
+  }
+  function finish() {
+    if (dragIdx < 0) return;
+    var v = vehicles[dragIdx];
+    var moved = v[dragAxis] !== dragOrigPos;
+    dragIdx = -1;
+    if (moved) {
+      moves++;
+      $('mv').textContent = moves;
+      checkWin();
+    }
+    draw();
+  }
+
+  cv.addEventListener('touchstart', function (e) { e.preventDefault(); start(e); }, false);
+  cv.addEventListener('touchmove', function (e) { e.preventDefault(); move(e); }, false);
+  cv.addEventListener('touchend', function (e) { e.preventDefault(); finish(); }, false);
+  cv.addEventListener('mousedown', function (e) { isMouseDown = true; start(e); }, false);
+  cv.addEventListener('mousemove', function (e) { if (isMouseDown) move(e); }, false);
+  window.addEventListener('mouseup', function () { if (isMouseDown) { isMouseDown = false; finish(); } }, false);
+  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
+
+  (function () {
+    var sel = $('lvSel');
+    for (var i = 0; i < LEVELS.length; i++) {
+      var o = document.createElement('option'); o.value = i; o.textContent = '레벨 ' + LEVELS[i].label;
+      sel.appendChild(o);
+    }
+    sel.onchange = function () { loadLevel(parseInt(sel.value, 10)); };
+  })();
+  $('re').onclick = function () { loadLevel(curLevel); };
+
+  loadLevel(0);
+})();
+</script>
+<script src="sound.js?v=26"></script>
+<script src="vfx.js?v=2"></script>
+<script>SFX.attachBgm();</script>
+</body>
+</html>
