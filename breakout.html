@@ -28,7 +28,7 @@
   </div>
   <p style="text-align:center;color:#888">좌우로 문질러 받침대 이동 · 터치하면 발사 / 레이저 발사 / 붙은 공 놓기</p>
 </div>
-<script src="sound.js?v=28"></script>
+<script src="sound.js?v=29"></script>
 <script src="touchfx.js?v=2"></script>
 <script>
 (function () {
@@ -365,7 +365,7 @@
     items = []; bolts = [];
     buildBricks(levelIdx); resetBall(); $('msg').textContent = '터치하면 공 발사';
     updateInfo(); draw();
-    SFX.play('start'); SFX.musicStart(true);
+    SFX.play('start'); SFX.musicStartIfNotOff(true);
   }
   function updateInfo() {
     $('sc').textContent = score; $('lv').textContent = lives; $('st').textContent = stage; $('best').textContent = Math.max(best, score);
@@ -397,7 +397,7 @@
     items = []; bolts = [];
     resetBall();
     updateInfo(); $('msg').textContent = '이어서 합니다 · 터치하면 발사';
-    SFX.musicStart(true);
+    SFX.musicStartIfNotOff(true);
   }
 
   function onAllBallsLost() {
@@ -638,7 +638,7 @@
     resetBall();
     $('msg').textContent = '이어하기! 터치하면 발사';
     updateInfo(); saveGame();
-    SFX.musicStart(true);
+    SFX.musicStartIfNotOff(true);
   };
 
   (function () {

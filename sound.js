@@ -273,7 +273,7 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 28,
+    version: 29,
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -281,13 +281,22 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 28, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 29, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
       if (muted) halt(); else if (wanted) startMusic(false);
     },
     musicStart: function (restart) { startMusic(!!restart); },
+    // musicStart와 같지만, 이 페이지의 "배경음" 선택(attachBgm 드롭다운)이
+    // 명시적으로 "끄기"면 켜지 않는다 — 게임이 시작할 때마다 자동으로
+    // 배경음악을 트는 쪽(아케이드 게임 공통 패턴)에서, 사용자가 그 드롭다운을
+    // 꺼놨는데도 음악이 다시 켜지는 버그를 막기 위함.
+    musicStartIfNotOff: function (restart) {
+      var off = false;
+      try { off = localStorage.getItem('bgm:' + (location.pathname.split('/').pop() || 'index.html')) === 'off'; } catch (e) {}
+      if (!off) startMusic(!!restart);
+    },
     musicStop: function (reset) { wanted = false; halt(); if (reset) { evIdx = 0; loopN = 0; } },
     setTempo: function (m) { tempo = m; },
     isMusicMuted: function () { return musicMuted; },
