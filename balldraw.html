@@ -43,8 +43,9 @@
     <canvas id="cv" width="364" height="480"></canvas>
     <div class="pad" style="margin-top:4px">
       <button class="btn gray" id="zoomOut" style="padding:8px 18px;font-size:18px">－</button>
-      <span style="font-size:13px;color:#888">화면 확대/축소</span>
+      <span style="font-size:13px;color:#888">손가락 1개로 끌기, 2개로 확대/축소</span>
       <button class="btn gray" id="zoomIn" style="padding:8px 18px;font-size:18px">＋</button>
+      <br><button class="btn gray" id="camReset" style="margin-top:4px;font-size:14px;padding:6px 14px">↻ 자동 추적으로</button>
     </div>
     <div class="pad">
       <button class="btn" id="again" style="display:none">다시 추첨</button>
@@ -99,20 +100,79 @@
   var CUR = STAGES[0]; // 레이스 시작 시 선택된 스테이지로 다시 설정됨
 
   var CW = 364, CH = 480, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-  var PPU_MIN = 7, PPU_MAX = 20;
+  var PPU_MIN = 7, PPU_MAX = 24, PPU_DEFAULT = 14;
   // 픽셀/단위(원본 좌표 단위 그대로 쓰고 그릴 때만 변환). "Pot of greed"에서
   // 카메라가 리드 공(leadY = 아직 못 들어온 공 중 가장 밑까지 간 공) 기준으로
   // 따라가는데, 그 공이 항아리 바닥 쪽에 머물러 있으면 다른 공이 날개를 타고
-  // 올라가도(y가 줄어드는 방향) 화면 위쪽이 가려서 안 보이는 문제가 있었음 —
-  // 카메라 추적 로직을 억지로 고치는 대신, 사용자가 직접 줌아웃해서 더 넓은
-  // 범위를 볼 수 있게 +/- 버튼을 추가함(화면 확대율만 바뀌고 물리에는 전혀
-  // 영향 없음).
-  var PPU = 14;
+  // 올라가도(y가 줄어드는 방향) 화면 위쪽이 가려서 안 보이는 문제가 있었음.
+  // 처음엔 +/- 줌 버튼만 추가했는데, 세로 카메라가 여전히 leadY를 자동으로
+  // 따라가기 때문에 축소해도 "리드 공 중심으로" 작아질 뿐 위쪽이 안 보이는
+  // 문제가 그대로였고, 가로는 애초에 카메라 개념이 없어(sx(x)=x*PPU, 중심
+  // 보정 없음) 줌을 바꾸면 화면 왼쪽으로 쏠려 보이는 버그까지 있었음. 그래서
+  // 가로 카메라(camX)를 새로 추가해 sx()도 세로처럼 중심 보정하고, 터치로
+  // 직접 카메라를 끌고(팬) 두 손가락으로 확대/축소(핀치)할 수 있게 함 —
+  // 한 번이라도 손으로 조작하면(manualCam) 세로 자동 추적을 멈추고 사용자가
+  // 원하는 곳을 마음대로 보게 해준다. "자동 추적으로" 버튼으로 다시 복귀 가능.
+  var CAM_X_DEFAULT = CW / (2 * PPU_DEFAULT); // 기존 sx(x)=x*PPU와 PPU=14에서 결과가 같도록 역산한 값
+  var camX = CAM_X_DEFAULT, manualCam = false;
+  var PPU = PPU_DEFAULT;
   try { var savedPPU = parseFloat(localStorage.getItem('balldrawZoom')); if (savedPPU >= PPU_MIN && savedPPU <= PPU_MAX) PPU = savedPPU; } catch (e) {}
   function setZoom(v) {
     PPU = Math.max(PPU_MIN, Math.min(PPU_MAX, v));
     try { localStorage.setItem('balldrawZoom', String(PPU)); } catch (e) {}
   }
+  function resetCam() { camX = CAM_X_DEFAULT; manualCam = false; }
+
+  // ---- 터치로 카메라 조작: 손가락 1개 = 끌기(팬), 2개 = 확대/축소(핀치) ----
+  var camTouch = null; // { mode:'pan', lastX, lastY } | { mode:'pinch', lastDist, lastMidX, lastMidY }
+  function camTouchLocal(t) {
+    var r = cv.getBoundingClientRect();
+    return { x: (t.clientX - r.left) / r.width * CW, y: (t.clientY - r.top) / r.height * CH };
+  }
+  function camScreenToWorld(px, py) { return { x: camX + (px - CW / 2) / PPU, y: camY + (py - CH / 2) / PPU }; }
+  function onCamTouchStart(e) {
+    if (state !== 'running' && state !== 'done') return;
+    var pts = [], i;
+    for (i = 0; i < e.touches.length; i++) pts.push(camTouchLocal(e.touches[i]));
+    if (pts.length === 1) camTouch = { mode: 'pan', lastX: pts[0].x, lastY: pts[0].y };
+    else if (pts.length >= 2) {
+      var dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y;
+      camTouch = { mode: 'pinch', lastDist: Math.sqrt(dx * dx + dy * dy), lastMidX: (pts[0].x + pts[1].x) / 2, lastMidY: (pts[0].y + pts[1].y) / 2 };
+    }
+  }
+  function onCamTouchMove(e) {
+    if (!camTouch) return;
+    e.preventDefault();
+    var pts = [], i;
+    for (i = 0; i < e.touches.length; i++) pts.push(camTouchLocal(e.touches[i]));
+    manualCam = true;
+    if (pts.length >= 2) {
+      var ddx = pts[1].x - pts[0].x, ddy = pts[1].y - pts[0].y;
+      var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+      var midX = (pts[0].x + pts[1].x) / 2, midY = (pts[0].y + pts[1].y) / 2;
+      if (camTouch.mode !== 'pinch') { camTouch = { mode: 'pinch', lastDist: dist, lastMidX: midX, lastMidY: midY }; return; }
+      var worldBefore = camScreenToWorld(camTouch.lastMidX, camTouch.lastMidY);
+      if (camTouch.lastDist > 10) setZoom(PPU * (dist / camTouch.lastDist));
+      camX = worldBefore.x - (midX - CW / 2) / PPU;
+      camY = worldBefore.y - (midY - CH / 2) / PPU;
+      camTouch.lastDist = dist; camTouch.lastMidX = midX; camTouch.lastMidY = midY;
+    } else if (pts.length === 1) {
+      if (camTouch.mode !== 'pan') { camTouch = { mode: 'pan', lastX: pts[0].x, lastY: pts[0].y }; return; }
+      camX -= (pts[0].x - camTouch.lastX) / PPU; camY -= (pts[0].y - camTouch.lastY) / PPU;
+      camTouch.lastX = pts[0].x; camTouch.lastY = pts[0].y;
+    }
+  }
+  function onCamTouchEnd(e) {
+    var pts = [], i;
+    for (i = 0; i < e.touches.length; i++) pts.push(camTouchLocal(e.touches[i]));
+    if (!pts.length) camTouch = null;
+    else if (pts.length === 1) camTouch = { mode: 'pan', lastX: pts[0].x, lastY: pts[0].y };
+  }
+  cv.addEventListener('touchstart', onCamTouchStart, false);
+  cv.addEventListener('touchmove', onCamTouchMove, false);
+  cv.addEventListener('touchend', onCamTouchEnd, false);
+  cv.addEventListener('touchcancel', onCamTouchEnd, false);
+
   var tfx = TouchFX.attach(cv);
   function $(id) { return document.getElementById(id); }
   function now() { return Date.now(); }
@@ -232,6 +292,7 @@
       });
     }
     camY = CUR.spawnY + (CH / PPU) * 0.5;
+    resetCam(); // 새 레이스는 항상 자동 추적 + 기본 가로 중심으로 시작
   }
 
   function buildLegend() {
@@ -476,14 +537,16 @@
         }
       }
     }
-    var camTarget = anyUnfinished ? (leadY + (CH / PPU) * 0.18) : (CUR.goalY + (CH / PPU) * 0.1);
-    var camMin = CUR.spawnY + (CH / PPU) * 0.5, camMax = CUR.goalY + (CH / PPU) * 0.4;
-    if (camTarget < camMin) camTarget = camMin; if (camTarget > camMax) camTarget = camMax;
-    camY += (camTarget - camY) * Math.min(1, dtMs * 0.004);
+    if (!manualCam) {
+      var camTarget = anyUnfinished ? (leadY + (CH / PPU) * 0.18) : (CUR.goalY + (CH / PPU) * 0.1);
+      var camMin = CUR.spawnY + (CH / PPU) * 0.5, camMax = CUR.goalY + (CH / PPU) * 0.4;
+      if (camTarget < camMin) camTarget = camMin; if (camTarget > camMax) camTarget = camMax;
+      camY += (camTarget - camY) * Math.min(1, dtMs * 0.004);
+    }
     if (state === 'running' && now() > raceTimeoutAt) forceFinishRemaining();
   }
 
-  function sx(x) { return x * PPU; }
+  function sx(x) { return (x - camX) * PPU + CW / 2; }
   function sy(y) { return (y - camY) * PPU + CH / 2; }
 
   function draw() {
@@ -571,6 +634,7 @@
   };
   $('zoomOut').onclick = function () { setZoom(PPU / 1.15); };
   $('zoomIn').onclick = function () { setZoom(PPU * 1.15); };
+  $('camReset').onclick = resetCam;
 })();
 </script>
 <script>SFX.attachBgm();</script>
