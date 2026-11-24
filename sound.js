@@ -231,8 +231,15 @@
     tick:   function () { tone(1200, 0.02, 'square', 0.04, 0); }
   };
 
-  // 게임 화면 위쪽에 "배경음" 선택 칸을 붙인다. 게임마다 선택을 기억하고, 꺼짐이 기본값.
-  function attachBgm() {
+  // 게임 화면 위쪽에 "배경음" 선택 칸을 붙인다. 게임마다 선택을 기억하고,
+  // 한 번도 고른 적 없으면 defaultId를 기본값으로 쓴다(안 주면 "끄기").
+  // 드롭다운이 "끄기"를 보여주면서 실제로는 재생되는 모순을 막기 위해,
+  // 아케이드 게임처럼 시작하면 자동 재생하고 싶은 쪽은 반드시 실제 곡
+  // id(예: 'a')를 defaultId로 넘길 것 — "한 번도 안 골랐다"와 "명시적으로
+  // 껐다"를 localStorage 유무만으로 구분하던 예전 방식은, 사용자가 드롭다운을
+  // 건드리지 않아 화면엔 "꺼짐"이 보이는데 실제로는 재생되는 불일치를 낳았음.
+  function attachBgm(defaultId) {
+    defaultId = defaultId || 'off';
     var top = document.querySelector('.top');
     if (!top || document.getElementById('bgmbar')) return;
     var page = location.pathname.split('/').pop() || 'index.html';
@@ -258,12 +265,20 @@
       loopOn = true; tempo = 1; setSong(id); startMusic(true);
     }
     function applySaved() {
-      var id = 'off', ok = false;
-      try { id = localStorage.getItem(KEY) || 'off'; } catch (e) {}
+      // 저장된 선택이 있으면(사용자가 한 번이라도 드롭다운을 바꾼 적 있으면)
+      // 그걸 그대로 따르고, 곧바로 재생까지 시작한다(기존 동작 유지).
+      // 저장된 게 없으면 defaultId를 "화면에 보여주기만" 하고 재생은 시작하지
+      // 않는다 — 실제 재생 시작은 게임 자신의 musicStartIfNotOff가 "시작"
+      // 시점에 맡는다. 여기서 재생까지 같이 시작해버리면, 드롭다운은 아직
+      // 아무것도 "선택"한 적 없는데(저장된 값 없음) 터치 한 번(오디오 언록)
+      // 만으로 배경음악이 먼저 나와버려서 "시작"과 타이밍이 어긋난다.
+      var saved = null, id, ok = false;
+      try { saved = localStorage.getItem(KEY); } catch (e) {}
+      id = saved || defaultId;
       for (var k = 0; k < sel.options.length; k++) if (sel.options[k].value === id) ok = true;
       if (!ok) id = 'off';
       if (sel.value !== id) sel.value = id;
-      if (id !== 'off') apply(id, false);
+      if (saved && id !== 'off') apply(id, false);
     }
     sel.onchange = function () { apply(sel.value, true); };
     loadSong('b', 'bradinsky.json', function (ok) { if (ok) { add('b', '음악 B'); applySaved(); } });
@@ -273,7 +288,7 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 29,
+    version: 30,
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -281,7 +296,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 29, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 30, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

@@ -40,7 +40,7 @@
     <button class="btn" id="bl">◀</button><button class="btn" id="br">▶</button><button class="btn" id="bd">▼</button><button class="btn" id="bs" style="font-size:16px">회전</button><button class="btn gray" id="bh">떨구기</button>
   </div>
 </div>
-<script src="sound.js?v=29"></script>
+<script src="sound.js?v=30"></script>
 <script>
 (function () {
   var COLS = 10, ROWS = 20;
@@ -293,5 +293,6 @@
   board = emptyBoard(); layout(); drawNext(); updateInfo();
 })();
 </script>
+<script>SFX.attachBgm('a');</script>
 </body>
 </html>
