@@ -11,8 +11,9 @@
   #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
   #g { width: 312px; margin: 0 auto; position: relative; }
   .h { float: left; width: 96px; height: 96px; margin: 4px; border-radius: 50%; background: #8b6b4a; text-align: center; line-height: 96px; font-size: 56px; }
+  @-webkit-keyframes molePop { 0% { -webkit-transform: scale(.3); opacity: 0; } 60% { -webkit-transform: scale(1.15); opacity: 1; } 100% { -webkit-transform: scale(1); } }
   @keyframes molePop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
-  .h.active { animation: molePop .22s ease-out; }
+  .h.active { -webkit-animation: molePop .22s ease-out; animation: molePop .22s ease-out; }
   .clr { clear: both; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
 </style>

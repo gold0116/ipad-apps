@@ -12,9 +12,10 @@
   #gridWrap { position: relative; width: 324px; margin: 0 auto; }
   #grid { width: 324px; }
   .cell { float: left; width: 36px; height: 36px; line-height: 36px; text-align: center; font-weight: bold; font-size: 18px; background: #c8ccd3; border: 1px solid #fff; border-right-color: #8a8f98; border-bottom-color: #8a8f98; }
+  @-webkit-keyframes cellPop { from { -webkit-transform: scale(.5); opacity: 0; } to { -webkit-transform: scale(1); opacity: 1; } }
   @keyframes cellPop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .cell.open { background: #eceef1; border: 1px solid #d5d8dd; }
-  .cell.fresh { animation: cellPop .15s ease-out; }
+  .cell.fresh { -webkit-animation: cellPop .15s ease-out; animation: cellPop .15s ease-out; }
   .cell.boom { background: #e5484d; }
   .n1{color:#2f6fed}.n2{color:#2a9d4a}.n3{color:#e5484d}.n4{color:#6b3fc4}.n5{color:#a33}.n6{color:#099}
   .clr { clear: both; }

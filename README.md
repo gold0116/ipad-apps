@@ -5,6 +5,12 @@
 
 > A collection of small web apps and games that run on the **iPad 2 (iOS 9.3.5, Safari 9)** — no App Store, no install. Plain ES5 / HTML5 canvas, works offline. Also useful as a reference for what old Safari can and cannot do.
 
+> ⚠️ **iPad 2 미확인 (2026-11-24 기준)**: 스네이크(스와이프/효과음/이펙트), touchfx.js,
+> 지뢰찾기·짝맞추기·두더지 잡기(효과음·vfx.js 시각 효과), sound.js의 새 효과음은
+> 아직 폰(모바일 브라우저)으로만 확인했고 실제 iPad 2(iOS 9.3.5 Safari)에서는
+> 테스트 전입니다. CSS 애니메이션에는 -webkit- 접두사를 맞춰 뒀지만, 실기에서
+> 한 번 확인 후 이 문구는 지워 주세요.
+
 ## 바로 써 보기
 
 - 데모: **https://gold0116.github.io/ipad-apps/**

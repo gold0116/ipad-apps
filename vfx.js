@@ -74,7 +74,10 @@
     if (shakeCssDone) return;
     shakeCssDone = true;
     var s = document.createElement('style');
-    s.textContent = '@keyframes vfxShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}.vfx-shake{animation:vfxShake .36s}';
+    s.textContent =
+      '@-webkit-keyframes vfxShake{0%,100%{-webkit-transform:translateX(0)}20%{-webkit-transform:translateX(-7px)}40%{-webkit-transform:translateX(6px)}60%{-webkit-transform:translateX(-4px)}80%{-webkit-transform:translateX(3px)}}' +
+      '@keyframes vfxShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}' +
+      '.vfx-shake{-webkit-animation:vfxShake .36s;animation:vfxShake .36s}';
     document.head.appendChild(s);
   }
   function shake(el) {
