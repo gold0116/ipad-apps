@@ -195,6 +195,8 @@
   var FX = {
     // 게임 시작: 짧게 올라가는 3음 팡파레
     start:  function () { tone(440, 0.07, 'square', 0.09, 0); tone(660, 0.08, 'square', 0.09, 0.07); tone(880, 0.13, 'square', 0.1, 0.14); },
+    // 버블 슈터: 구슬 발사하는 "슝"
+    shoot:  function () { tone(300, 0.1, 'square', 0.08, 0, 900); },
     jump:   function () { tone(420, 0.14, 'square', 0.1, 0, 780); },
     coin:   function () { tone(988, 0.07, 'square', 0.09, 0); tone(1319, 0.14, 'square', 0.09, 0.07); },
     item:   function () { tone(523, 0.08, 'square', 0.1, 0); tone(659, 0.08, 'square', 0.1, 0.08); tone(784, 0.16, 'square', 0.1, 0.16); },
@@ -271,7 +273,7 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 27,
+    version: 28,
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -279,7 +281,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 27, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 28, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

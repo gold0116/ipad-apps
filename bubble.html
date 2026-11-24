@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>버블 슈터</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #info { text-align: center; font-size: 20px; margin: 4px 0 8px; }
+  canvas { display: block; margin: 0 auto; background: #1d2330; border-radius: 8px; touch-action: none; }
+  #msg { text-align: center; font-size: 22px; font-weight: bold; color: #e5484d; height: 28px; margin-top: 6px; }
+  .pad { text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 버블 슈터</div>
+<div class="wrap">
+  <div id="info">점수 <b id="sc">0</b> · 단계 <b id="lv">1</b> · 최고 <b id="best">0</b></div>
+  <canvas id="cv" width="320" height="480"></canvas>
+  <div id="msg"></div>
+  <div class="pad"><button class="btn gray" id="go">새 게임</button></div>
+  <p style="text-align:center;color:#888">끌어서 조준하고 손을 떼면 발사 · 같은 색 3개 이상 모으면 터져요</p>
+</div>
+<script src="sound.js?v=28"></script>
+<script src="touchfx.js?v=2"></script>
+<script>
+(function () {
+  var W = 320, H = 480, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var tfx = TouchFX.attach(cv);
+  function $(i) { return document.getElementById(i); }
+
+  var R = 20, ROWH = R * 1.73, COLS = 8;
+  var ORIGIN_Y = R + 6, DANGER_Y = H - 90, SHOOT_X = W / 2, SHOOT_Y = H - 40;
+  var COLORS = ['#e5484d', '#2f6fed', '#2a9d4a', '#ffd166', '#6b3fc4', '#5ec9f0'];
+
+  // board[row]는 "짝수 행"이면 길이 COLS, "홀수 행"이면 길이 COLS-1인 배열.
+  // 각 칸은 null(빈 칸) 또는 { c: 색상 인덱스 }.
+  var board, score = 0, best = 0, level = 1, state = 'ready', cur = null, nxt = 0, overAt = 0;
+  var aim = { x: 0, y: 0, active: false }, flying = null;
+  var particles = [], falling = [], flashT = 0, shakeT = 0;
+  try { best = parseInt(localStorage.getItem('bestBubble') || '0', 10) || 0; } catch (e) {}
+
+  function rowLen(r) { return (r % 2 === 0) ? COLS : COLS - 1; }
+  function rowOffsetX(r) { return (r % 2 === 0) ? R : R * 2; }
+  function cellX(r, c) { return rowOffsetX(r) + c * 2 * R; }
+  function cellY(r) { return ORIGIN_Y + r * ROWH; }
+  function emptyRow(r) { var n = rowLen(r), a = []; for (var i = 0; i < n; i++) a.push(null); return a; }
+
+  // (r,c)의 이웃 최대 6칸: 같은 행 좌우 + 위/아래 행의 2칸(행 종류에 따라 다름)
+  function neighbors(r, c) {
+    var out = [[r, c - 1], [r, c + 1]];
+    if (r % 2 === 0) { out.push([r - 1, c - 1]); out.push([r - 1, c]); out.push([r + 1, c - 1]); out.push([r + 1, c]); }
+    else { out.push([r - 1, c]); out.push([r - 1, c + 1]); out.push([r + 1, c]); out.push([r + 1, c + 1]); }
+    return out;
+  }
+  function cellAt(r, c) {
+    if (r < 0 || r >= board.length) return undefined;
+    if (c < 0 || c >= rowLen(r)) return undefined;
+    return board[r][c];
+  }
+
+  // 난이도에 따라 시작 보드를 절차적으로 만든다(레벨이 올라갈수록 줄 수·색 수 증가)
+  function genLevel(n) {
+    var rows = Math.min(5 + Math.floor(n / 2), 10);
+    var nColors = Math.min(3 + Math.floor(n / 3), COLORS.length);
+    var b = [], r, c;
+    for (r = 0; r < rows; r++) {
+      b.push([]);
+      for (c = 0; c < rowLen(r); c++) b[r].push({ c: Math.floor(Math.random() * nColors) });
+    }
+    return b;
+  }
+
+  function colorsPresent() {
+    var set = {}, found = false, r, c, cell;
+    for (r = 0; r < board.length; r++) for (c = 0; c < rowLen(r); c++) {
+      cell = board[r][c];
+      if (cell) { set[cell.c] = true; found = true; }
+    }
+    if (!found) return [0];
+    var out = [];
+    for (var k in set) if (set.hasOwnProperty(k)) out.push(parseInt(k, 10));
+    return out;
+  }
+  function randPresentColor() {
+    var p = colorsPresent();
+    return p[Math.floor(Math.random() * p.length)];
+  }
+
+  function newGame() {
+    level = 1; score = 0; state = 'run'; flying = null; particles = []; falling = []; flashT = 0; shakeT = 0;
+    board = genLevel(level);
+    cur = randPresentColor(); nxt = randPresentColor();
+    $('msg').textContent = ''; updateInfo();
+    SFX.play('start'); SFX.musicStart(true);
+  }
+  function nextLevel() {
+    level++; board = genLevel(level);
+    cur = randPresentColor(); nxt = randPresentColor();
+    $('msg').textContent = '단계 ' + level + '!';
+    updateInfo();
+  }
+  function updateInfo() {
+    if (score > best) { best = score; try { localStorage.setItem('bestBubble', best); } catch (e) {} }
+    $('sc').textContent = score; $('lv').textContent = level; $('best').textContent = Math.max(best, score);
+  }
+
+  function burst(cx, cy, color, count) {
+    for (var i = 0; i < (count || 10); i++) {
+      var a = Math.random() * Math.PI * 2, sp = 1.2 + Math.random() * 2.6;
+      particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, r: 1.5 + Math.random() * 2, c: color });
+    }
+  }
+  function stepFx() {
+    var i;
+    for (i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.94; p.vy *= 0.94; p.life -= 0.03;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (i = falling.length - 1; i >= 0; i--) {
+      var f = falling[i];
+      f.vy += 0.5; f.y += f.vy; f.life -= 0.02;
+      if (f.life <= 0 || f.y > H + R) falling.splice(i, 1);
+    }
+    if (flashT > 0) flashT = Math.max(0, flashT - 0.08);
+    if (shakeT > 0) shakeT = Math.max(0, shakeT - 0.1);
+  }
+
+  // 새로 박힌 (r,c)에서 같은 색으로 연결된 그룹을 찾는다
+  function sameColorGroup(r, c) {
+    var startCell = cellAt(r, c);
+    if (!startCell) return [];
+    var col = startCell.c, seen = {}, st = [[r, c]], out = [];
+    seen[r + ',' + c] = true;
+    while (st.length) {
+      var p = st.pop(), cell = cellAt(p[0], p[1]);
+      if (!cell || cell.c !== col) continue;
+      out.push(p);
+      var nb = neighbors(p[0], p[1]);
+      for (var i = 0; i < nb.length; i++) {
+        var key = nb[i][0] + ',' + nb[i][1];
+        if (seen[key]) continue;
+        seen[key] = true;
+        if (cellAt(nb[i][0], nb[i][1])) st.push(nb[i]);
+      }
+    }
+    return out;
+  }
+  // 천장(0행)에서부터 연결된 모든 칸을 찾아, 거기 포함되지 않은(떠버린) 칸을 반환
+  function floatingCells() {
+    var seen = {}, st = [], r, c;
+    for (c = 0; c < rowLen(0); c++) if (cellAt(0, c)) { st.push([0, c]); seen['0,' + c] = true; }
+    while (st.length) {
+      var p = st.pop(), nb = neighbors(p[0], p[1]);
+      for (var i = 0; i < nb.length; i++) {
+        var key = nb[i][0] + ',' + nb[i][1];
+        if (seen[key]) continue;
+        if (cellAt(nb[i][0], nb[i][1])) { seen[key] = true; st.push(nb[i]); }
+      }
+    }
+    var out = [];
+    for (r = 0; r < board.length; r++) for (c = 0; c < rowLen(r); c++) {
+      if (cellAt(r, c) && !seen[r + ',' + c]) out.push([r, c]);
+    }
+    return out;
+  }
+  function boardEmpty() {
+    for (var r = 0; r < board.length; r++) for (var c = 0; c < rowLen(r); c++) if (board[r][c]) return false;
+    return true;
+  }
+
+  function settle(r, c, color) {
+    board[r][c] = { c: color };
+    var group = sameColorGroup(r, c), i, p;
+    if (group.length >= 3) {
+      for (i = 0; i < group.length; i++) {
+        p = group[i];
+        burst(cellX(p[0], p[1]), cellY(p[0]), COLORS[color]);
+        board[p[0]][p[1]] = null;
+      }
+      score += group.length * 10;
+      SFX.play('pop');
+      var floats = floatingCells();
+      if (floats.length) {
+        for (i = 0; i < floats.length; i++) {
+          p = floats[i];
+          var fc = board[p[0]][p[1]];
+          falling.push({ x: cellX(p[0], p[1]), y: cellY(p[0]), vy: 0, life: 1, c: COLORS[fc.c] });
+          board[p[0]][p[1]] = null;
+        }
+        score += floats.length * 20;
+        SFX.play('drop');
+      }
+      updateInfo();
+      if (boardEmpty()) { SFX.play('win'); nextLevel(); return; }
+    }
+    updateInfo();
+    // 바닥 근처까지 쌓이면 게임 오버
+    for (var rr = 0; rr < board.length; rr++) {
+      if (cellY(rr) + R >= DANGER_Y) {
+        for (var cc = 0; cc < rowLen(rr); cc++) if (board[rr][cc]) { gameOver(); return; }
+      }
+    }
+    cur = nxt; nxt = randPresentColor();
+  }
+
+  function gameOver() {
+    state = 'over'; overAt = Date.now(); shakeT = 1; flashT = 1;
+    $('msg').textContent = '게임 오버! 점수 ' + score;
+    SFX.musicStop(true); SFX.play('over');
+  }
+
+  // 날아가는 구슬을 가장 가까운 빈 칸에 내려놓을 위치를 찾는다
+  function findSlot(x, y, hitR, hitC) {
+    var best = null, bestD = Infinity, cands;
+    if (hitR === null) {
+      // 천장(어떤 칸과도 안 부딪힘)에 닿은 경우: 0행에서 x에 가장 가까운 빈 칸
+      cands = [];
+      for (var c = 0; c < rowLen(0); c++) if (!cellAt(0, c)) cands.push([0, c]);
+    } else {
+      cands = neighbors(hitR, hitC);
+      cands.push([hitR, hitC]); // 혹시 그 자리가 비어 있으면(이론상 없어야 하지만 방어적으로)
+    }
+    for (var i = 0; i < cands.length; i++) {
+      var r = cands[i][0], c = cands[i][1];
+      if (r < 0 || r >= board.length + 1) continue;
+      if (r === board.length) { board.push(emptyRow(r)); }
+      if (c < 0 || c >= rowLen(r)) continue;
+      if (cellAt(r, c)) continue;
+      var dx = cellX(r, c) - x, dy = cellY(r) - y, d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = [r, c]; }
+    }
+    return best;
+  }
+
+  function fire() {
+    if (state !== 'run' || flying) return;
+    var dx = aim.x - SHOOT_X, dy = aim.y - SHOOT_Y, len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 10) return;
+    var speed = 7;
+    flying = { x: SHOOT_X, y: SHOOT_Y, vx: dx / len * speed, vy: dy / len * speed, c: cur };
+    SFX.play('shoot');
+  }
+
+  function updateFlying() {
+    if (!flying) return;
+    var steps = 3, i;
+    for (i = 0; i < steps; i++) {
+      flying.x += flying.vx / steps; flying.y += flying.vy / steps;
+      if (flying.x < R) { flying.x = R; flying.vx = -flying.vx; SFX.play('tick'); }
+      if (flying.x > W - R) { flying.x = W - R; flying.vx = -flying.vx; SFX.play('tick'); }
+      var hitR = null, hitC = null, hit = false;
+      if (flying.y <= R) { hit = true; }
+      else {
+        for (var r = 0; r < board.length && !hit; r++) for (var c = 0; c < rowLen(r); c++) {
+          var cell = board[r][c];
+          if (!cell) continue;
+          var ddx = cellX(r, c) - flying.x, ddy = cellY(r) - flying.y;
+          if (ddx * ddx + ddy * ddy < (2 * R - 3) * (2 * R - 3)) { hit = true; hitR = r; hitC = c; break; }
+        }
+      }
+      if (hit) {
+        var slot = findSlot(flying.x, flying.y, hitR, hitC);
+        if (slot) settle(slot[0], slot[1], flying.c);
+        flying = null;
+        return;
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (shakeT > 0) { var m = shakeT * 4; ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m); }
+    // 보드
+    var r, c;
+    for (r = 0; r < board.length; r++) for (c = 0; c < rowLen(r); c++) {
+      var cell = board[r][c];
+      if (!cell) continue;
+      drawBubble(cellX(r, c), cellY(r), COLORS[cell.c]);
+    }
+    // 떨어지는 구슬
+    for (var i = 0; i < falling.length; i++) { ctx.globalAlpha = Math.max(0, falling[i].life); drawBubble(falling[i].x, falling[i].y, falling[i].c); }
+    ctx.globalAlpha = 1;
+    // 위험선
+    ctx.strokeStyle = 'rgba(229,72,77,.35)'; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(W, DANGER_Y); ctx.stroke(); ctx.setLineDash([]);
+    // 조준선
+    if (state === 'run' && !flying && aim.active) {
+      var dx = aim.x - SHOOT_X, dy = aim.y - SHOOT_Y, len = Math.sqrt(dx * dx + dy * dy) || 1;
+      ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 2; ctx.setLineDash([5, 6]);
+      ctx.beginPath(); ctx.moveTo(SHOOT_X, SHOOT_Y); ctx.lineTo(SHOOT_X + dx / len * 200, SHOOT_Y + dy / len * 200); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // 발사 중인 구슬 / 대기 구슬
+    if (flying) drawBubble(flying.x, flying.y, COLORS[flying.c]);
+    else if (state === 'run') drawBubble(SHOOT_X, SHOOT_Y, COLORS[cur]);
+    if (state === 'run') { ctx.globalAlpha = 0.6; drawBubble(SHOOT_X + 36, SHOOT_Y + 14, COLORS[nxt], 0.6); ctx.globalAlpha = 1; }
+    // 파티클
+    for (i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (flashT > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (flashT * 0.25) + ')'; ctx.fillRect(0, 0, W, H); }
+    ctx.restore();
+    if (state === 'ready') { ctx.fillStyle = '#ccd3e0'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('새 게임을 눌러 시작', W / 2, H / 2); ctx.textAlign = 'left'; }
+    tfx.draw(ctx);
+  }
+  function drawBubble(x, y, color, scale) {
+    var rr = R * (scale || 1);
+    ctx.beginPath(); ctx.arc(x, y, rr - 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath(); ctx.arc(x - rr * 0.3, y - rr * 0.3, rr * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+  }
+
+  var last = 0;
+  function loop() {
+    var t = Date.now();
+    if (t - last > 8) { updateFlying(); stepFx(); last = t; }
+    draw();
+    frame();
+  }
+  function frame() {
+    var r = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
+    if (r) r.call(window, loop); else setTimeout(loop, 16);
+  }
+
+  function setAim(clientX, clientY) {
+    var rct = cv.getBoundingClientRect();
+    aim.x = (clientX - rct.left) / rct.width * W;
+    aim.y = (clientY - rct.top) / rct.height * H;
+    aim.active = true;
+    if (aim.y > SHOOT_Y - 10) aim.y = SHOOT_Y - 10; // 아래로는 못 쏘게
+  }
+  cv.addEventListener('touchstart', function (e) { e.preventDefault(); setAim(e.touches[0].clientX, e.touches[0].clientY); }, false);
+  cv.addEventListener('touchmove', function (e) { e.preventDefault(); setAim(e.touches[0].clientX, e.touches[0].clientY); }, false);
+  cv.addEventListener('touchend', function (e) { e.preventDefault(); fire(); aim.active = false; }, false);
+  cv.addEventListener('mousedown', function (e) { setAim(e.clientX, e.clientY); }, false);
+  cv.addEventListener('mousemove', function (e) { if (aim.active) setAim(e.clientX, e.clientY); }, false);
+  cv.addEventListener('mouseup', function (e) { fire(); aim.active = false; }, false);
+  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
+
+  $('go').onclick = newGame;
+  board = []; cur = 0; nxt = 0;
+  updateInfo();
+  last = Date.now(); frame();
+})();
+</script>
+<script>SFX.attachBgm();</script>
+</body>
+</html>

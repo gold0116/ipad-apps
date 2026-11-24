@@ -1,13 +1,14 @@
 CACHE MANIFEST
-# v70 2026-11-24
+# v71 2026-11-24
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=27
+sound.js?v=28
 touchfx.js?v=2
 vfx.js?v=2
 tetris.html
 balldraw.html
+bubble.html
 breakout.html
 rushhour.html
 rushhour-levels.txt?v=2
