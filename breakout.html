@@ -351,6 +351,7 @@
   }
   function onStageClear() {
     saveBest(); stage++; levelIdx++; addScore(50); SFX.play('line'); SFX.play('win');
+    effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
     buildBricks(levelIdx); items = []; bolts = [];
     resetBall();
     $('msg').textContent = '단계 ' + stage + '! 터치하면 발사';
