@@ -1,5 +1,5 @@
 CACHE MANIFEST
-# v59 2026-11-24
+# v60 2026-11-24
 
 emoji.js?v=16
 sound.js?v=26
@@ -8,6 +8,7 @@ vfx.js?v=2
 tetris.html
 breakout.html
 rushhour.html
+rushhour-levels.txt?v=1
 sudoku.html
 gomoku.html
 chess.html
