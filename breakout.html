@@ -465,16 +465,23 @@
     if (!autoPlay) return;
     press();
     if (state !== 'play') return;
-    var targetX = px, bestDist = Infinity, i, usingItem = false;
-    for (i = 0; i < items.length; i++) {
-      var it = items[i];
-      if (it.y < py) { var d = py - it.y; if (d < bestDist) { bestDist = d; targetX = it.x; usingItem = true; } }
+    // 가장 급한(받침대에 가장 먼저 닿을) 공을 기준으로 삼는다. 공이 받침대에
+    // 가까워지면(URGENT 이내) 아이템이 아무리 탐나도 무시하고 공부터 받는다 —
+    // 아이템 쫓아가다 공을 놓쳐 죽는 일이 없도록.
+    var i, b, ball = null, ballDist = Infinity;
+    for (i = 0; i < balls.length; i++) {
+      b = balls[i];
+      var d = b.vy > 0 ? py - b.y : Infinity;
+      if (d < ballDist) { ballDist = d; ball = b; }
     }
-    if (!usingItem || bestDist > 220) {
-      usingItem = false;
-      var best = null, bestY = -Infinity;
-      for (i = 0; i < balls.length; i++) { var b = balls[i]; if (b.y > bestY) { bestY = b.y; best = b; } }
-      if (best) targetX = best.x;
+    if (!ball) { var bestY = -Infinity; for (i = 0; i < balls.length; i++) if (balls[i].y > bestY) { bestY = balls[i].y; ball = balls[i]; } }
+    var targetX = ball ? ball.x : px, usingItem = false, URGENT = 150;
+    if (ballDist > URGENT) {
+      var bestDist = Infinity;
+      for (i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (it.y < py) { var dd = py - it.y; if (dd < bestDist) { bestDist = dd; targetX = it.x; usingItem = true; } }
+      }
     }
     if (!usingItem) {
       // 공은 일부러 받침대 정중앙이 아니라 살짝 랜덤하게 치우쳐 받아서, 매번
