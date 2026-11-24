@@ -171,6 +171,7 @@
     })();
   </script>
 </div>
+<script src="version.js?v=1"></script>
 <script src="emoji.js?v=16"></script>
 <script src="sound.js?v=26"></script>
 <script>
@@ -210,6 +211,7 @@
   function ok(f) { try { return f(); } catch (e) { return '오류: ' + e.message; } }
   var st = ['없음', '대기', '확인 중', '내려받는 중', '최신', '오래됨', '없어짐'];
   var rows = [
+    ['앱 버전', (window.APP_VERSION || '?') + (window.APP_VERSION_DATE ? ' (' + window.APP_VERSION_DATE + ')' : '') + (window.APP_VERSION_NOTE ? '<br><span style="color:#888;font-size:13px">' + window.APP_VERSION_NOTE + '</span>' : '')],
     ['화면(CSS px)', window.innerWidth + ' x ' + window.innerHeight],
     ['배율(DPR)', window.devicePixelRatio || 1],
     ['홈 화면 앱 모드', window.navigator.standalone ? '예' : '아니오 (Safari)'],

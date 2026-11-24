@@ -1,6 +1,7 @@
 CACHE MANIFEST
-# v64 2026-11-24
+# v65 2026-11-24
 
+version.js?v=1
 emoji.js?v=16
 sound.js?v=26
 touchfx.js?v=2
