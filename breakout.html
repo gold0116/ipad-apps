@@ -97,7 +97,7 @@
 
   var ITEM_TYPES = ['expand', 'multi', 'laser', 'catch', 'slow', 'through', 'life', 'score2'];
   var ITEM_WEIGHT = { expand: 14, multi: 12, laser: 8, catch: 10, slow: 14, through: 6, life: 5, score2: 12 };
-  var BADGE = { expand: 'E', multi: 'D', laser: 'L', catch: 'C', slow: 'S', through: 'B', life: '+1', score2: 'x2' };
+  var LABEL = { expand: '확장', multi: '멀티볼', laser: '레이저', catch: '찰떡', slow: '감속', through: '관통', life: '+1', score2: '2배' };
   var ICOLOR = { expand: '#3fb950', multi: '#f5d90a', laser: '#e5484d', catch: '#3b82f6', slow: '#8a63d2', through: '#f08a24', life: '#ff6b9d', score2: '#5ec9f0' };
   var MAXDUR = { expand: 12000, slow: 8000, catch: 12000, laser: 10000, through: 6000, score2: 15000 };
   var HUD_ORDER = ['expand', 'slow', 'catch', 'laser', 'through', 'score2'];
@@ -400,25 +400,27 @@
     if (b.hp > 1) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(b.x + 3, b.y + 3, BW - 6, BH - 6); }
   }
   function drawCapsule(x, y, type) {
-    var w = 22, h = 14, label = BADGE[type];
+    var label = LABEL[type];
+    ctx.font = 'bold ' + (label.length > 2 ? 10 : 11) + 'px sans-serif';
+    var tw = ctx.measureText(label).width, w = Math.max(24, tw + 10), h = 15;
     ctx.fillStyle = ICOLOR[type];
-    roundRect(x - w / 2, y - h / 2, w, h, 5); ctx.fill();
+    roundRect(x - w / 2, y - h / 2, w, h, 6); ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold ' + (label.length > 1 ? 10 : 12) + 'px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, x, y + 1);
   }
   function drawHud() {
     var x = 6, y = 4;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = 'bold 10px sans-serif';
     for (var i = 0; i < HUD_ORDER.length; i++) {
       var n = HUD_ORDER[i];
       if (effects[n] <= 0) continue;
-      ctx.fillStyle = ICOLOR[n]; ctx.fillRect(x, y, 16, 16);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif';
-      ctx.fillText(BADGE[n], x + 2, y + 3);
-      ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(x, y + 16, Math.round(16 * (effects[n] / MAXDUR[n])), 3);
-      x += 20;
+      var label = LABEL[n], tw = ctx.measureText(label).width, bw = Math.max(22, tw + 8);
+      ctx.fillStyle = ICOLOR[n]; ctx.fillRect(x, y, bw, 16);
+      ctx.fillStyle = '#fff'; ctx.fillText(label, x + bw / 2, y + 3);
+      ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(x, y + 16, Math.round(bw * (effects[n] / MAXDUR[n])), 3);
+      x += bw + 4;
     }
   }
   function draw() {
@@ -522,10 +524,14 @@
     balls[0].vx = Math.sin(a) * sp; balls[0].vy = -Math.cos(a) * sp;
     state = 'play'; $('msg').textContent = '';
   }
-  cv.addEventListener('touchstart', function (e) { e.preventDefault(); setX(e.touches[0].clientX); press(); }, false);
+  // 터치를 짚는 순간 바로 쏘지 않고, 끌어서 조준한 뒤 손을 뗄 때 발사한다
+  // (받침대 위치를 잡기도 전에 공이 발사/레이저 발사/붙은 공 놓기가 되어버리는 문제 수정)
+  cv.addEventListener('touchstart', function (e) { e.preventDefault(); setX(e.touches[0].clientX); }, false);
   cv.addEventListener('touchmove', function (e) { e.preventDefault(); setX(e.touches[0].clientX); }, false);
+  cv.addEventListener('touchend', function (e) { e.preventDefault(); press(); }, false);
   cv.addEventListener('mousemove', function (e) { setX(e.clientX); }, false);
-  cv.addEventListener('mousedown', function (e) { setX(e.clientX); press(); }, false);
+  cv.addEventListener('mousedown', function (e) { setX(e.clientX); }, false);
+  cv.addEventListener('mouseup', function (e) { press(); }, false);
   document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
   document.addEventListener('keydown', function (e) {
     if (e.keyCode === 37) { px = Math.max(pw / 2, px - 18); e.preventDefault(); }
