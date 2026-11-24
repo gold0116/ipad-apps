@@ -322,7 +322,14 @@
     b.x += nx * overlap; b.y += ny * overlap;
     var rx = cxl * cos - cyl * sin, ry = cxl * sin + cyl * cos;
     var svx = 0, svy = 0;
-    if (box.angVel) { svx = -box.angVel * ry; svy = box.angVel * rx; }
+    // "회전 날개에 맞아도 공이 무겁게 바로 떨어진다"는 피드백으로 회전
+    // 장애물의 표면 속도 전달을 키움. 1.8배+마찰 4배는 Wheel of fortune의
+    // 다닥다닥 붙은 날개 5개 사이에서 공이 미친 듯이 서로 튕기기만 하고 못
+    // 내려가는 심한 역효과가 나서(8번 중 5번 제한시간 도달) 되돌렸고, 마찰만
+    // 1.5배도 8번 중 1번이 근처까지 가서 역시 되돌렸음 — 지금은 사용자 요청으로
+    // 아주 약하게(1.25배, 마찰은 원래 0.2 그대로)만 키워서 직접 실기로 확인 중.
+    var FLING_BOOST = 1.25;
+    if (box.angVel) { svx = -box.angVel * ry * FLING_BOOST; svy = box.angVel * rx * FLING_BOOST; }
     var relvx = b.vx - svx, relvy = b.vy - svy;
     var vn = relvx * nx + relvy * ny;
     if (vn >= 0) return;
@@ -344,17 +351,23 @@
     var dx = b.x - c.cx, dy = b.y - c.cy, dist = Math.sqrt(dx * dx + dy * dy);
     var minD = b.r + c.r + CPAD;
     if (dist >= minD || dist <= 0) return;
-    if (c.life > 0) { c.popped = true; burst(c.cx, c.cy, '#7ee8fa', 14); SFX.play('pop'); return; }
+    // life가 있는(터지는) 거품도 restitution(원본 그대로 1.5 — 아주 잘 튕김)으로
+    // 먼저 제대로 튕겨낸 뒤에 터뜨린다. box2d도 닿은 바로 다음 스텝에야 지우므로
+    // 그 사이에 한 번은 진짜 물리 충돌이 적용됨 — 처음엔 "닿자마자 바로 사라짐"
+    // 으로 단순화했다가, 그러면 거품이 아무 역할도 안 하는 것처럼 느껴진다는
+    // 피드백을 받고 고침.
     var nx = dx / dist, ny = dy / dist, overlap = minD - dist;
     b.x += nx * overlap; b.y += ny * overlap;
     var vn = b.vx * nx + b.vy * ny;
-    if (vn >= 0) return;
-    var jn = -(1 + c.restitution) * vn;
-    b.vx += jn * nx; b.vy += jn * ny;
-    var tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty;
-    var maxJt = FRICTION * Math.abs(jn), jt = -vt;
-    if (jt > maxJt) jt = maxJt; else if (jt < -maxJt) jt = -maxJt;
-    b.vx += jt * tx; b.vy += jt * ty;
+    if (vn < 0) {
+      var jn = -(1 + c.restitution) * vn;
+      b.vx += jn * nx; b.vy += jn * ny;
+      var tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty;
+      var maxJt = FRICTION * Math.abs(jn), jt = -vt;
+      if (jt > maxJt) jt = maxJt; else if (jt < -maxJt) jt = -maxJt;
+      b.vx += jt * tx; b.vy += jt * ty;
+    }
+    if (c.life > 0) { c.popped = true; burst(c.cx, c.cy, '#7ee8fa', 14); SFX.play('pop'); }
   }
 
   function resolveBallBall(a, b) {
