@@ -79,10 +79,17 @@
 
   var COLS = 8, BW = 34, BH = 14, GAP = 2, OX = 6, OY = 40;
   var COLORS = ['#e5484d', '#f08a24', '#f5d90a', '#3fb950', '#3b82f6'];
-  var MCOLOR = '#8a63d2', XCOLOR = '#e5484d', SCOLOR = '#5a6270';
+  var MCOLOR = '#8a63d2', XCOLOR = '#e5484d', SCOLOR = '#5a6270', GCOLOR = '#e8b339';
 
   // 레벨: 8칸짜리 줄 문자열. . 빈칸 / 1-5 색깔 벽돌(1번 맞음) / M 두 번 맞아야 깨짐
   // / S 강철(공으로는 안 깨지고 레이저로만 깨짐, 단계 클리어 조건에서도 제외) / X 폭발(깨지면 상하좌우 연쇄 파괴)
+  // / G 황금(공·레이저·폭발 전부 안 통하는 완전 장식용 벽돌, 단계 클리어 조건에서도 제외)
+  //
+  // 8번(황금 상자)부터 11번(황금 불꽃)까지 네 개는 공개 Arkanoid 클론
+  // (szejkerek/ArkanoidGameClone)의 스테이지 모양을 참고해서 이 저장소 칸 수(8칸)에
+  // 맞게 새로 짠 것. 그 저장소의 "골드 벽돌"(절대 안 깨짐, 장식용) 개념을 G로 들여왔고,
+  // 아이템 종류(이 저장소가 이미 8종으로 더 많음)나 벽돌 색깔별 점수 차등 같은 건
+  // 그대로 가져오지 않음.
   var LEVELS = [
     ['11111111', '22222222', '33333333', '22222222', '11111111'],
     ['2.2.2.2.', '.3.3.3.3', '2.2.2.2.', '.3.3.3.3', '2.2.2.2.'],
@@ -91,9 +98,13 @@
     ['11X11X11', '22222222', 'X111111X', '22222222', '11X11X11'],
     ['MMMMMMMM', '1......1', '1.SSSS.1', '1......1', 'MMMMMMMM'],
     ['12345432', '.222222.', '..3333..', '...22...', '....1...'],
-    ['S.S.S.S.', '.2.2.2.2', 'S.S.S.S.', '.2.2.2.2', 'S.S.S.S.']
+    ['S.S.S.S.', '.2.2.2.2', 'S.S.S.S.', '.2.2.2.2', 'S.S.S.S.'],
+    ['GGGGGGGG', '1......1', '1.2222.1', '1......1', '33333333'],
+    ['1......1', '.2....2.', '..3..3..', '...44...', '...55...', '..3..3..', '.2....2.', '1......1'],
+    ['GG....GG', 'G......G', 'G.1111.G', 'G.2222.G', 'G.3333.G', 'G......G', 'GG....GG'],
+    ['G.X..X.G', 'G......G', '.111111.', '.222222.', 'G......G', 'G.X..X.G']
   ];
-  var LEVEL_NAMES = ['기본', '체크무늬', '다이아몬드', '강철벽', '폭발 벽돌', '강철 상자', '피라미드', '강철 기둥'];
+  var LEVEL_NAMES = ['기본', '체크무늬', '다이아몬드', '강철벽', '폭발 벽돌', '강철 상자', '피라미드', '강철 기둥', '황금 상자', '지그재그', '황금 격자', '황금 불꽃'];
 
   var ITEM_TYPES = ['expand', 'multi', 'laser', 'catch', 'slow', 'through', 'life', 'score2'];
   var ITEM_WEIGHT = { expand: 14, multi: 12, laser: 8, catch: 10, slow: 14, through: 6, life: 5, score2: 12 };
@@ -114,6 +125,7 @@
     var x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
     if (ch === '.') return null;
     if (ch === 'S') return { x: x, y: y, r: r, c: c, type: 'steel', hp: 1, steelHp: 3, color: SCOLOR };
+    if (ch === 'G') return { x: x, y: y, r: r, c: c, type: 'gold', hp: 1, color: GCOLOR };
     if (ch === 'X') return { x: x, y: y, r: r, c: c, type: 'explosive', hp: 1, color: XCOLOR };
     if (ch === 'M') return { x: x, y: y, r: r, c: c, type: 'normal', hp: 2, color: MCOLOR };
     var n = parseInt(ch, 10);
@@ -145,13 +157,13 @@
       var d = [[-1, 0], [1, 0], [0, -1], [0, 1]];
       for (var i = 0; i < d.length; i++) {
         var rr = b.r + d[i][0], cc = b.c + d[i][1];
-        if (grid[rr] && grid[rr][cc] && grid[rr][cc].type !== 'steel') destroyBrick(grid[rr][cc], true);
+        if (grid[rr] && grid[rr][cc] && grid[rr][cc].type !== 'steel' && grid[rr][cc].type !== 'gold') destroyBrick(grid[rr][cc], true);
       }
     }
   }
   function remainingBreakable() {
     var n = 0;
-    for (var i = 0; i < bricks.length; i++) if (bricks[i].type !== 'steel') n++;
+    for (var i = 0; i < bricks.length; i++) if (bricks[i].type !== 'steel' && bricks[i].type !== 'gold') n++;
     return n;
   }
 
@@ -225,7 +237,9 @@
       for (var j = bricks.length - 1; j >= 0; j--) {
         var b = bricks[j];
         if (bo.x >= b.x && bo.x <= b.x + BW && bo.y >= b.y && bo.y <= b.y + BH) {
-          if (b.type === 'steel') {
+          if (b.type === 'gold') {
+            SFX.play('bonk');
+          } else if (b.type === 'steel') {
             b.steelHp--; SFX.play('drop');
             if (b.steelHp <= 0) { addScore(20); SFX.play('coin'); destroyBrick(b); }
           } else {
@@ -265,17 +279,17 @@
     for (var bi = bricks.length - 1; bi >= 0; bi--) {
       var b = bricks[bi];
       if (nx + ball.r > b.x && nx - ball.r < b.x + BW && ny + ball.r > b.y && ny - ball.r < b.y + BH) {
-        var isSteel = b.type === 'steel', through = effects.through > 0 && !isSteel;
+        var indestructible = b.type === 'steel' || b.type === 'gold', through = effects.through > 0 && !indestructible;
         if (!through) {
           var ox = Math.min(nx + ball.r - b.x, b.x + BW - (nx - ball.r));
           var oy = Math.min(ny + ball.r - b.y, b.y + BH - (ny - ball.r));
           // 거의 정확히 모서리에 맞으면(ox,oy가 비슷하면) 한 축만 뒤집지 않고 둘 다
-          // 뒤집는다. 한 축만 뒤집으면 모서리(특히 강철 벽돌 사이 좁은 틈)에서
+          // 뒤집는다. 한 축만 뒤집으면 모서리(특히 강철/황금 벽돌 사이 좁은 틈)에서
           // 공이 좌우/상하로 왔다갔다만 하며 제자리에 박히는 경우가 있었음.
           if (Math.abs(ox - oy) < 1.5) { ball.vx = -ball.vx; ball.vy = -ball.vy; }
           else if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
         }
-        if (!isSteel) {
+        if (!indestructible) {
           b.hp--;
           if (b.hp <= 0) { addScore(10); SFX.play('coin'); maybeSpawnItem(b); destroyBrick(b); }
           else { addScore(5); SFX.play('drop'); }
@@ -405,6 +419,14 @@
       ctx.fillStyle = SCOLOR; ctx.fillRect(b.x, b.y, BW, BH);
       ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(b.x, b.y + BH); ctx.lineTo(b.x + BW, b.y); ctx.stroke();
+      return;
+    }
+    if (b.type === 'gold') {
+      ctx.fillStyle = GCOLOR; ctx.fillRect(b.x, b.y, BW, BH);
+      ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y + BH / 2); ctx.lineTo(b.x + BW, b.y + BH / 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,.2)';
+      ctx.strokeRect(b.x + 1, b.y + 1, BW - 2, BH - 2);
       return;
     }
     ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, BW, BH);
