@@ -22,7 +22,7 @@
   </div>
   <p style="text-align:center;color:#888">화면을 탭하거나 점프 버튼으로 뛰고, 숙이기 버튼을 누르고 있으면 익룡 밑으로 지나가요</p>
 </div>
-<script src="sound.js?v=26"></script>
+<script src="sound.js?v=27"></script>
 <script>
 (function () {
   var W = 600, H = 150, GY = 127, U = 2;
@@ -118,7 +118,7 @@
     for (var i = 0; i < 3; i++) clouds.push({ x: rnd(0, W), y: rnd(15, 60) });
     for (var j = 0; j < 22; j++) bumps.push({ x: rnd(0, W), y: GY + rnd(5, 18), w: rnd(2, 6) });
   }
-  function begin() { reset(); state = 'run'; last = 0; }
+  function begin() { reset(); state = 'run'; last = 0; SFX.play('start'); SFX.musicStart(true); }
   function jump() {
     if (state === 'ready') { begin(); }
     else if (state === 'over') { if (Date.now() - overAt > 500) begin(); return; }
@@ -179,7 +179,7 @@
     for (i = 0; i < obs.length; i++) if (hit(obs[i])) { die(); break; }
   }
   function die() {
-    state = 'over'; overAt = Date.now(); SFX.play('hit');
+    state = 'over'; overAt = Date.now(); SFX.musicStop(true); SFX.play('hit');
     var s = Math.floor(score);
     if (s > hi) { hi = s; try { localStorage.setItem('bestDino', hi); } catch (e) {} }
   }

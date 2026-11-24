@@ -28,6 +28,7 @@
   <div style="text-align:center"><button class="btn" id="re">새 게임</button></div>
   <p style="text-align:center;color:#888">화면을 밀어서 타일을 움직이세요 (스와이프)</p>
 </div>
+<script src="sound.js?v=27"></script>
 <script>
 (function () {
   var N = 4, g, score = 0, best = 0, over = false;
@@ -42,7 +43,7 @@
     var p = e[Math.floor(Math.random() * e.length)];
     g[p[0]][p[1]] = Math.random() < 0.9 ? 2 : 4;
   }
-  function init() { g = empty(); score = 0; over = false; addTile(); addTile(); draw(); }
+  function init() { g = empty(); score = 0; over = false; addTile(); addTile(); draw(); SFX.play('start'); SFX.musicStart(true); }
 
   function slideRow(row) {
     var a = [], moved = false, merged = false, i;
@@ -76,7 +77,7 @@
     if (moved) {
       addTile(); if (!canMove()) over = true; draw();
       SFX.play(merged ? 'coin' : 'move');
-      if (over) SFX.play('over');
+      if (over) { SFX.musicStop(true); SFX.play('over'); }
     }
   }
   function canMove() {
@@ -118,7 +119,6 @@
   init();
 })();
 </script>
-<script src="sound.js?v=26"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

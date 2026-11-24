@@ -40,7 +40,7 @@
     <button class="btn" id="bl">◀</button><button class="btn" id="br">▶</button><button class="btn" id="bd">▼</button><button class="btn" id="bs" style="font-size:16px">회전</button><button class="btn gray" id="bh">떨구기</button>
   </div>
 </div>
-<script src="sound.js?v=26"></script>
+<script src="sound.js?v=27"></script>
 <script>
 (function () {
   var COLS = 10, ROWS = 20;
@@ -100,7 +100,7 @@
   function reset() {
     board = emptyBoard(); bag = []; score = 0; lines = 0; level = 1; dropMs = 800;
     nextId = nextFromBag(); spawn(); state = 'run'; schedule(); updateInfo(); draw();
-    SFX.setTempo(1); SFX.musicStart(true);
+    SFX.setTempo(1); SFX.play('start'); SFX.musicStart(true);
   }
   function schedule() { clearInterval(timer); timer = setInterval(tick, dropMs); }
   function tick() { if (state === 'run') softStep(); }

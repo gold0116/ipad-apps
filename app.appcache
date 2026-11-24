@@ -1,9 +1,9 @@
 CACHE MANIFEST
-# v69 2026-11-24
+# v70 2026-11-24
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=26
+sound.js?v=27
 touchfx.js?v=2
 vfx.js?v=2
 tetris.html
