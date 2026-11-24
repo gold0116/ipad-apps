@@ -460,19 +460,28 @@
   // 디버그용 자동 플레이: 공 받기(떨어지는 아이템 우선 추적, 없으면 가장 낮은 공을
   // 따라감), 공이 준비 상태면 자동 발사, 붙잡힌 공은 자동으로 놓고, 레이저가
   // 있으면 쿨다운에 맞춰 자동으로 쏜다(press()가 이 세 가지를 이미 다 처리함).
-  function stepAuto() {
+  var autoBias = 0, autoBiasT = 0;
+  function stepAuto(dt) {
     if (!autoPlay) return;
     press();
     if (state !== 'play') return;
-    var targetX = px, bestDist = Infinity, i;
+    var targetX = px, bestDist = Infinity, i, usingItem = false;
     for (i = 0; i < items.length; i++) {
       var it = items[i];
-      if (it.y < py) { var d = py - it.y; if (d < bestDist) { bestDist = d; targetX = it.x; } }
+      if (it.y < py) { var d = py - it.y; if (d < bestDist) { bestDist = d; targetX = it.x; usingItem = true; } }
     }
-    if (bestDist === Infinity || bestDist > 220) {
+    if (!usingItem || bestDist > 220) {
+      usingItem = false;
       var best = null, bestY = -Infinity;
       for (i = 0; i < balls.length; i++) { var b = balls[i]; if (b.y > bestY) { bestY = b.y; best = b; } }
       if (best) targetX = best.x;
+    }
+    if (!usingItem) {
+      // 공은 일부러 받침대 정중앙이 아니라 살짝 랜덤하게 치우쳐 받아서, 매번
+      // 같은 자리만 때리지 않고 각도가 바뀌며 벽돌 사이를 넓게 돌아다니게 함
+      autoBiasT -= (dt || 16);
+      if (autoBiasT <= 0) { autoBias = (Math.random() * 2 - 1) * pw * 0.35; autoBiasT = 500 + Math.random() * 900; }
+      targetX += autoBias;
     }
     var step2 = 7;
     if (targetX > px + step2) px += step2; else if (targetX < px - step2) px -= step2; else px = targetX;
@@ -481,7 +490,7 @@
   function loop() {
     var t = now(), dt = t - last; last = t;
     if (dt > 40) dt = 40; if (dt < 0) dt = 0;
-    stepAuto(); step(dt); stepFx(); draw();
+    stepAuto(dt); step(dt); stepFx(); draw();
     frame();
   }
   function frame() {
