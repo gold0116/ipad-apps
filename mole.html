@@ -9,11 +9,8 @@
 <style>
   body { -webkit-user-select: none; user-select: none; }
   #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
-  #g { width: 312px; margin: 0 auto; position: relative; }
+  #g { width: 312px; margin: 0 auto; }
   .h { float: left; width: 96px; height: 96px; margin: 4px; border-radius: 50%; background: #8b6b4a; text-align: center; line-height: 96px; font-size: 56px; }
-  @-webkit-keyframes molePop { 0% { -webkit-transform: scale(.3); opacity: 0; } 60% { -webkit-transform: scale(1.15); opacity: 1; } 100% { -webkit-transform: scale(1); } }
-  @keyframes molePop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
-  .h.active { -webkit-animation: molePop .22s ease-out; animation: molePop .22s ease-out; }
   .clr { clear: both; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
 </style>
@@ -60,16 +57,12 @@
       cells[i].className = 'h' + (i === active ? ' active' : '');
     }
   }
-  function holeCenter(i) {
-    var el = cells[i], wr = g.getBoundingClientRect(), cr = el.getBoundingClientRect();
-    return { x: cr.left - wr.left + cr.width / 2, y: cr.top - wr.top + cr.height / 2 };
-  }
   function celebrate() {
-    var wr = g.getBoundingClientRect();
+    var r = g.getBoundingClientRect();
     for (var n = 0; n < 6; n++) {
       (function (n) {
         setTimeout(function () {
-          VFX.burst(g, Math.random() * wr.width, Math.random() * wr.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
+          VFX.burst(g, Math.random() * r.width, Math.random() * r.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
         }, n * 90);
       })(n);
     }
@@ -78,8 +71,7 @@
     if (!running) return;
     if (i !== active) { SFX.play('tick'); VFX.shake(cells[i]); return; }
     score++; SFX.play('bonk');
-    var p = holeCenter(i);
-    VFX.burst(g, p.x, p.y, { count: 18, speed: 2.8, colors: ['#ffd166', '#ff9f43', '#7ee787'] });
+    VFX.burstAt(cells[i], { count: 18, speed: 2.8, colors: ['#ffd166', '#ff9f43', '#7ee787'] });
     active = -1; show();
   }
   function pop() {
@@ -114,7 +106,7 @@
 })();
 </script>
 <script src="sound.js?v=26"></script>
-<script src="vfx.js?v=1"></script>
+<script src="vfx.js?v=2"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

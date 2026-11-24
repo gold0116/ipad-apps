@@ -9,12 +9,9 @@
 <style>
   body { -webkit-user-select: none; user-select: none; }
   #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
-  #gWrap { position: relative; width: 328px; margin: 0 auto; }
+  #g { width: 328px; margin: 0 auto; }
   .k { float: left; width: 74px; height: 74px; margin: 4px; border-radius: 10px; background: #2f6fed; color: #fff; text-align: center; line-height: 74px; font-size: 38px; }
-  @-webkit-keyframes cardPop { from { -webkit-transform: scale(.6); opacity: 0; } to { -webkit-transform: scale(1); opacity: 1; } }
-  @keyframes cardPop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .k.up { background: #fff; }
-  .k.up:not(.ok) { -webkit-animation: cardPop .14s ease-out; animation: cardPop .14s ease-out; }
   .k.ok { background: #d6f5dc; }
   .clr { clear: both; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
@@ -24,7 +21,7 @@
 <div class="top"><a href="index.html">‹ 홈</a> 짝맞추기</div>
 <div class="wrap">
   <div id="info">시도 <b id="tr">0</b> · 최고 <b id="best">-</b></div>
-  <div id="gWrap"><div id="g"></div><div class="clr"></div></div>
+  <div id="g"></div><div class="clr"></div>
   <div id="msg"></div>
   <div style="text-align:center"><button class="btn" id="re">새 게임</button></div>
 </div>
@@ -37,9 +34,8 @@
   function layout() {
     var B = Math.min(window.innerWidth - 24, window.innerHeight - 270, 660);
     if (B < 240) B = 240;
-    var c = Math.floor(B / 4) - 8, w = (4 * (c + 8)) + 'px';
-    document.getElementById('g').style.width = w;
-    document.getElementById('gWrap').style.width = w;
+    var c = Math.floor(B / 4) - 8;
+    document.getElementById('g').style.width = (4 * (c + 8)) + 'px';
     emSize = Math.floor(c * 0.65);
     sty.innerHTML = '.k{width:' + c + 'px;height:' + c + 'px;line-height:' + c + 'px;font-size:' + Math.floor(c * 0.5) + 'px}';
   }
@@ -67,23 +63,17 @@
     $('tr').textContent = tries; $('best').textContent = best ? best : '-';
   }
   function cardEl(idx) { return $('g').querySelector('[data-i="' + idx + '"]'); }
-  function cardCenter(idx) {
-    var el = cardEl(idx), wr = $('gWrap').getBoundingClientRect();
-    if (!el) return { x: wr.width / 2, y: wr.height / 2 };
-    var cr = el.getBoundingClientRect();
-    return { x: cr.left - wr.left + cr.width / 2, y: cr.top - wr.top + cr.height / 2 };
-  }
   function spark(idx) {
-    var p = cardCenter(idx);
-    VFX.burst($('gWrap'), p.x, p.y, { count: 16, speed: 2.4, colors: ['#ffd166', '#7ee787', '#5ec9f0'] });
+    var el = cardEl(idx);
+    if (el) VFX.burstAt(el, { count: 16, speed: 2.4, colors: ['#ffd166', '#7ee787', '#5ec9f0'] });
   }
   function shakeCard(idx) { var el = cardEl(idx); if (el) VFX.shake(el); }
   function celebrate() {
-    var wr = $('gWrap').getBoundingClientRect();
+    var r = $('g').getBoundingClientRect();
     for (var n = 0; n < 6; n++) {
       (function (n) {
         setTimeout(function () {
-          VFX.burst($('gWrap'), Math.random() * wr.width, Math.random() * wr.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
+          VFX.burst($('g'), Math.random() * r.width, Math.random() * r.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
         }, n * 90);
       })(n);
     }
@@ -119,7 +109,7 @@
 })();
 </script>
 <script src="sound.js?v=26"></script>
-<script src="vfx.js?v=1"></script>
+<script src="vfx.js?v=2"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

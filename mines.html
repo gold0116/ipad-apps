@@ -9,8 +9,7 @@
 <style>
   body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
-  #gridWrap { position: relative; width: 324px; margin: 0 auto; }
-  #grid { width: 324px; }
+  #grid { margin: 0 auto; width: 324px; }
   .cell { float: left; width: 36px; height: 36px; line-height: 36px; text-align: center; font-weight: bold; font-size: 18px; background: #c8ccd3; border: 1px solid #fff; border-right-color: #8a8f98; border-bottom-color: #8a8f98; }
   @-webkit-keyframes cellPop { from { -webkit-transform: scale(.5); opacity: 0; } to { -webkit-transform: scale(1); opacity: 1; } }
   @keyframes cellPop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -27,7 +26,7 @@
 <div class="top"><a href="index.html">‹ 홈</a> 지뢰찾기</div>
 <div class="wrap">
   <div id="info">남은 지뢰 <b id="left">0</b></div>
-  <div id="gridWrap"><div id="grid"></div><div class="clr"></div></div>
+  <div id="grid"></div><div class="clr"></div>
   <div id="msg"></div>
   <div id="mode">
     <button class="btn" id="m1">⛏ 열기</button>
@@ -40,21 +39,15 @@
 (function () {
   var W = 9, H = 9, M = 10;
   var cells, opened, flagged, mines, started, done, flagMode = false, openCnt, fresh = {};
-  var grid = document.getElementById('grid'), gridWrap = document.getElementById('gridWrap');
+  var grid = document.getElementById('grid');
   function $(i) { return document.getElementById(i); }
 
-  function cellCenter(i) {
-    var el = grid.children[i], wr = gridWrap.getBoundingClientRect();
-    if (!el) return { x: wr.width / 2, y: wr.height / 2 };
-    var cr = el.getBoundingClientRect();
-    return { x: cr.left - wr.left + cr.width / 2, y: cr.top - wr.top + cr.height / 2 };
-  }
   function celebrate() {
-    var wr = gridWrap.getBoundingClientRect();
+    var r = grid.getBoundingClientRect();
     for (var n = 0; n < 6; n++) {
       (function (n) {
         setTimeout(function () {
-          VFX.burst(gridWrap, Math.random() * wr.width, Math.random() * wr.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
+          VFX.burst(grid, Math.random() * r.width, Math.random() * r.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
         }, n * 90);
       })(n);
     }
@@ -109,14 +102,14 @@
     if (!started) { place(i); started = true; }
     fresh = {};
     if (c.m) {
-      var p = cellCenter(i);
+      var cellEl = grid.children[i];
       done = true;
       for (var k = 0; k < cells.length; k++) if (cells[k].m) { cells[k].o = true; fresh[k] = true; }
       c.boom = true; $('msg').textContent = '💥 지뢰!';
       SFX.play('boom');
-      VFX.shake(gridWrap);
-      VFX.flash(gridWrap, '229,72,77');
-      VFX.burst(gridWrap, p.x, p.y, { count: 26, speed: 3.4, colors: ['#e5484d', '#ff9f43', '#8a8f98'] });
+      VFX.shake(grid);
+      VFX.flash(grid, '229,72,77');
+      if (cellEl) VFX.burstAt(cellEl, { count: 26, speed: 3.4, colors: ['#e5484d', '#ff9f43', '#8a8f98'] });
       draw(); return;
     }
     SFX.play('reveal');
@@ -151,7 +144,7 @@
 })();
 </script>
 <script src="sound.js?v=26"></script>
-<script src="vfx.js?v=1"></script>
+<script src="vfx.js?v=2"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

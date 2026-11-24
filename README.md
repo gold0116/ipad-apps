@@ -5,11 +5,21 @@
 
 > A collection of small web apps and games that run on the **iPad 2 (iOS 9.3.5, Safari 9)** — no App Store, no install. Plain ES5 / HTML5 canvas, works offline. Also useful as a reference for what old Safari can and cannot do.
 
-> ⚠️ **iPad 2 미확인 (2026-11-24 기준)**: 스네이크(스와이프/효과음/이펙트), touchfx.js,
-> 지뢰찾기·짝맞추기·두더지 잡기(효과음·vfx.js 시각 효과), sound.js의 새 효과음은
-> 아직 폰(모바일 브라우저)으로만 확인했고 실제 iPad 2(iOS 9.3.5 Safari)에서는
-> 테스트 전입니다. CSS 애니메이션에는 -webkit- 접두사를 맞춰 뒀지만, 실기에서
-> 한 번 확인 후 이 문구는 지워 주세요.
+> ⚠️ **iPad 2 재확인 필요 (2026-11-24 기준)**: iPad 2 실기에서 스네이크(스와이프/효과음/
+> 이펙트), 지뢰찾기·짝맞추기·두더지 잡기(효과음·시각 효과)를 처음 확인했을 때 아래
+> 문제가 있었습니다.
+> - 스네이크: 터치 효과(물결)는 보이는데 스네이크/먹이가 안 보임
+> - 지뢰찾기: 안 연 칸과 연 칸이 구분 안 됨
+> - 짝맞추기·두더지 잡기: 그림(이모지)이 칸 중앙이 아니라 오른쪽 아래로 치우쳐 보임
+>
+> 원인으로 추정한 것: 기존 캔버스/그리드 위에 새 오버레이 캔버스를 겹치고, 그 부모에
+> `position:relative`를 거는 방식이 구형 WebKit(iOS 9 Safari)에서 `emoji.js`의
+> `-webkit-transform:scale()`로 그리는 이모지나 캔버스 합성을 깨뜨리는 것으로 보입니다.
+> `touchfx.js`/`vfx.js`를 **게임의 기존 DOM을 전혀 건드리지 않는 방식**(터치 효과는 게임
+> 자신의 캔버스에 직접 그리기, 시각 효과는 `document.body`에 `position:fixed`로 올린
+> 오버레이 하나만 사용)으로 다시 작성해 반영했지만, 저는 iPad 2 실기가 없어 이 수정이
+> 실제로 문제를 고쳤는지 확인하지 못했습니다. iPad 2에서 다시 확인해 주세요. 문제 없으면
+> 이 문구를 지우고, 남아 있으면 증상을 알려주세요.
 
 ## 바로 써 보기
 

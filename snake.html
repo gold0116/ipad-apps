@@ -24,9 +24,12 @@
   <p style="text-align:center;color:#888;margin:6px 0 2px">캔버스를 <b>스와이프</b>해서 방향을 바꿔요</p>
   <div id="startWrap"><button class="btn gray" id="go">시작</button></div>
 </div>
+<script src="sound.js?v=26"></script>
+<script src="touchfx.js?v=2"></script>
 <script>
 (function () {
   var N = 15, S = 20, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var tfx = TouchFX.attach(cv);
   function layout() {
     var B = Math.min(window.innerWidth - 24, window.innerHeight - 260, 640);
     if (B < 280) B = 280;
@@ -145,6 +148,7 @@
       flashT = Math.max(0, flashT - 0.08);
     }
     ctx.restore();
+    tfx.draw(ctx);
     $('sc').textContent = score; $('best').textContent = best;
   }
 
@@ -183,8 +187,6 @@
   window.requestAnimationFrame(render);
 })();
 </script>
-<script src="sound.js?v=26"></script>
-<script src="touchfx.js?v=1"></script>
-<script>SFX.attachBgm(); TouchFX.attach(document.getElementById('cv'));</script>
+<script>SFX.attachBgm();</script>
 </body>
 </html>
