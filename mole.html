@@ -9,8 +9,10 @@
 <style>
   body { -webkit-user-select: none; user-select: none; }
   #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
-  #g { width: 312px; margin: 0 auto; }
+  #g { width: 312px; margin: 0 auto; position: relative; }
   .h { float: left; width: 96px; height: 96px; margin: 4px; border-radius: 50%; background: #8b6b4a; text-align: center; line-height: 96px; font-size: 56px; }
+  @keyframes molePop { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+  .h.active { animation: molePop .22s ease-out; }
   .clr { clear: both; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; height: 30px; margin-top: 8px; }
 </style>
@@ -52,15 +54,37 @@
   }
   function show() {
     $('sc').textContent = score; $('tm').textContent = left; $('best').textContent = best;
-    for (var i = 0; i < 9; i++) cells[i].innerHTML = (i === active) ? emo('🐹', emSize) : '';
+    for (var i = 0; i < 9; i++) {
+      cells[i].innerHTML = (i === active) ? emo('🐹', emSize) : '';
+      cells[i].className = 'h' + (i === active ? ' active' : '');
+    }
+  }
+  function holeCenter(i) {
+    var el = cells[i], wr = g.getBoundingClientRect(), cr = el.getBoundingClientRect();
+    return { x: cr.left - wr.left + cr.width / 2, y: cr.top - wr.top + cr.height / 2 };
+  }
+  function celebrate() {
+    var wr = g.getBoundingClientRect();
+    for (var n = 0; n < 6; n++) {
+      (function (n) {
+        setTimeout(function () {
+          VFX.burst(g, Math.random() * wr.width, Math.random() * wr.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
+        }, n * 90);
+      })(n);
+    }
   }
   function hit(i) {
-    if (!running || i !== active) return;
-    score++; active = -1; show();
+    if (!running) return;
+    if (i !== active) { SFX.play('tick'); VFX.shake(cells[i]); return; }
+    score++; SFX.play('bonk');
+    var p = holeCenter(i);
+    VFX.burst(g, p.x, p.y, { count: 18, speed: 2.8, colors: ['#ffd166', '#ff9f43', '#7ee787'] });
+    active = -1; show();
   }
   function pop() {
     if (!running) return;
     active = Math.floor(Math.random() * 9); show();
+    SFX.play('pop');
     var ms = Math.max(450, 900 - score * 15);
     clearTimeout(hide);
     hide = setTimeout(function () { active = -1; show(); }, ms - 100);
@@ -71,10 +95,14 @@
     score = 0; left = 30; active = -1; running = true; $('msg').textContent = ''; show();
     tT = setInterval(function () {
       left--;
+      if (left > 0 && left <= 5) SFX.play('tick');
       if (left <= 0) {
         running = false; active = -1; clearInterval(tT); clearTimeout(mT); clearTimeout(hide);
-        if (score > best) { best = score; try { localStorage.setItem('bestMole', best); } catch (e) {} }
+        var isNewBest = score > best;
+        if (isNewBest) { best = score; try { localStorage.setItem('bestMole', best); } catch (e) {} }
         $('msg').textContent = '끝! 점수 ' + score;
+        SFX.play(isNewBest ? 'win' : 'over');
+        if (isNewBest) celebrate();
       }
       show();
     }, 1000);
@@ -84,7 +112,8 @@
   show();
 })();
 </script>
-<script src="sound.js?v=25"></script>
+<script src="sound.js?v=26"></script>
+<script src="vfx.js?v=1"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

@@ -9,9 +9,12 @@
 <style>
   body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #info { text-align: center; font-size: 20px; margin: 4px 0 10px; }
-  #grid { margin: 0 auto; width: 324px; }
+  #gridWrap { position: relative; width: 324px; margin: 0 auto; }
+  #grid { width: 324px; }
   .cell { float: left; width: 36px; height: 36px; line-height: 36px; text-align: center; font-weight: bold; font-size: 18px; background: #c8ccd3; border: 1px solid #fff; border-right-color: #8a8f98; border-bottom-color: #8a8f98; }
+  @keyframes cellPop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .cell.open { background: #eceef1; border: 1px solid #d5d8dd; }
+  .cell.fresh { animation: cellPop .15s ease-out; }
   .cell.boom { background: #e5484d; }
   .n1{color:#2f6fed}.n2{color:#2a9d4a}.n3{color:#e5484d}.n4{color:#6b3fc4}.n5{color:#a33}.n6{color:#099}
   .clr { clear: both; }
@@ -23,7 +26,7 @@
 <div class="top"><a href="index.html">‹ 홈</a> 지뢰찾기</div>
 <div class="wrap">
   <div id="info">남은 지뢰 <b id="left">0</b></div>
-  <div id="grid"></div><div class="clr"></div>
+  <div id="gridWrap"><div id="grid"></div><div class="clr"></div></div>
   <div id="msg"></div>
   <div id="mode">
     <button class="btn" id="m1">⛏ 열기</button>
@@ -35,9 +38,26 @@
 <script>
 (function () {
   var W = 9, H = 9, M = 10;
-  var cells, opened, flagged, mines, started, done, flagMode = false, openCnt;
-  var grid = document.getElementById('grid');
+  var cells, opened, flagged, mines, started, done, flagMode = false, openCnt, fresh = {};
+  var grid = document.getElementById('grid'), gridWrap = document.getElementById('gridWrap');
   function $(i) { return document.getElementById(i); }
+
+  function cellCenter(i) {
+    var el = grid.children[i], wr = gridWrap.getBoundingClientRect();
+    if (!el) return { x: wr.width / 2, y: wr.height / 2 };
+    var cr = el.getBoundingClientRect();
+    return { x: cr.left - wr.left + cr.width / 2, y: cr.top - wr.top + cr.height / 2 };
+  }
+  function celebrate() {
+    var wr = gridWrap.getBoundingClientRect();
+    for (var n = 0; n < 6; n++) {
+      (function (n) {
+        setTimeout(function () {
+          VFX.burst(gridWrap, Math.random() * wr.width, Math.random() * wr.height, { count: 14, speed: 2.6, colors: ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'] });
+        }, n * 90);
+      })(n);
+    }
+  }
 
   function init() {
     cells = []; started = false; done = false; openCnt = 0; flagged = 0;
@@ -71,7 +91,7 @@
     while (st.length) {
       var x = st.pop(), c = cells[x];
       if (c.o || c.f) continue;
-      c.o = true; openCnt++;
+      c.o = true; openCnt++; fresh[x] = true;
       if (c.n === 0 && !c.m) { var a = nb(x); for (var j = 0; j < a.length; j++) st.push(a[j]); }
     }
   }
@@ -80,17 +100,30 @@
     var c = cells[i];
     if (flagMode) {
       if (c.o) return;
-      c.f = !c.f; flagged += c.f ? 1 : -1; draw(); return;
+      c.f = !c.f; flagged += c.f ? 1 : -1;
+      SFX.play(c.f ? 'flag' : 'unflag');
+      draw(); return;
     }
     if (c.f || c.o) return;
     if (!started) { place(i); started = true; }
+    fresh = {};
     if (c.m) {
+      var p = cellCenter(i);
       done = true;
-      for (var k = 0; k < cells.length; k++) if (cells[k].m) cells[k].o = true;
-      c.boom = true; $('msg').textContent = '💥 지뢰!'; draw(); return;
+      for (var k = 0; k < cells.length; k++) if (cells[k].m) { cells[k].o = true; fresh[k] = true; }
+      c.boom = true; $('msg').textContent = '💥 지뢰!';
+      SFX.play('boom');
+      VFX.shake(gridWrap);
+      VFX.flash(gridWrap, '229,72,77');
+      VFX.burst(gridWrap, p.x, p.y, { count: 26, speed: 3.4, colors: ['#e5484d', '#ff9f43', '#8a8f98'] });
+      draw(); return;
     }
+    SFX.play('reveal');
     open(i);
-    if (openCnt === W * H - M) { done = true; $('msg').textContent = '🎉 성공!'; }
+    if (openCnt === W * H - M) {
+      done = true; $('msg').textContent = '🎉 성공!';
+      SFX.play('win'); celebrate();
+    }
     draw();
   }
   function draw() {
@@ -98,7 +131,7 @@
     for (var i = 0; i < cells.length; i++) {
       (function (idx) {
         var c = cells[idx], d = document.createElement('div');
-        d.className = 'cell' + (c.o ? ' open' : '') + (c.boom ? ' boom' : '');
+        d.className = 'cell' + (c.o ? ' open' : '') + (c.o && fresh[idx] ? ' fresh' : '') + (c.boom ? ' boom' : '');
         if (c.f && !c.o) d.textContent = '🚩';
         else if (c.o && c.m) d.textContent = '💣';
         else if (c.o && c.n) { d.textContent = c.n; d.className += ' n' + c.n; }
@@ -106,6 +139,7 @@
         grid.appendChild(d);
       })(i);
     }
+    fresh = {};
     $('left').textContent = M - flagged;
   }
   function setMode(f) { flagMode = f; $('m1').className = 'btn' + (f ? ' gray' : ''); $('m2').className = 'btn' + (f ? '' : ' gray'); }
@@ -115,7 +149,8 @@
   init();
 })();
 </script>
-<script src="sound.js?v=25"></script>
+<script src="sound.js?v=26"></script>
+<script src="vfx.js?v=1"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>

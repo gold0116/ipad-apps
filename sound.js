@@ -181,6 +181,17 @@
     } catch (e) {}
   }
 
+  // 같은 음을 살짝 어긋나게(디튠) 겹쳐 울려서 소리를 더 풍성하게 만든다 ("더블링")
+  function dtone(freq, dur, type, vol, delay) {
+    tone(freq, dur, type, (vol || 0.12) * 0.75, delay);
+    tone(freq * 1.012, dur, type, (vol || 0.12) * 0.6, delay);
+  }
+  // 같은 음을 점점 작아지며 여러 번 되풀이해 울림(에코)을 흉내낸다
+  function echo(freq, dur, type, vol, delay, times, gap, decay) {
+    times = times || 3; gap = gap == null ? 0.09 : gap; decay = decay == null ? 0.55 : decay;
+    for (var i = 0; i < times; i++) tone(freq, dur, type, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap);
+  }
+
   var FX = {
     jump:   function () { tone(420, 0.14, 'square', 0.1, 0, 780); },
     coin:   function () { tone(988, 0.07, 'square', 0.09, 0); tone(1319, 0.14, 'square', 0.09, 0.07); },
@@ -195,7 +206,25 @@
     drop:   function () { tone(140, 0.08, 'square', 0.12, 0, 80); },
     line:   function () { tone(523, 0.08, 'square', 0.1, 0); tone(659, 0.08, 'square', 0.1, 0.08); tone(784, 0.08, 'square', 0.1, 0.16); tone(1047, 0.16, 'square', 0.1, 0.24); },
     tetris: function () { var n = [523, 659, 784, 1047, 1319]; for (var i = 0; i < n.length; i++) tone(n[i], 0.1, 'square', 0.1, i * 0.07); },
-    over:   function () { tone(392, 0.2, 'square', 0.12, 0, 330); tone(330, 0.2, 'square', 0.12, 0.2, 260); tone(262, 0.4, 'square', 0.12, 0.4, 130); }
+    over:   function () { tone(392, 0.2, 'square', 0.12, 0, 330); tone(330, 0.2, 'square', 0.12, 0.2, 260); tone(262, 0.4, 'square', 0.12, 0.4, 130); },
+    // 칸 하나를 조용히 여는 "톡"
+    reveal: function () { tone(880, 0.035, 'square', 0.045, 0); },
+    // 깃발을 꽂거나(flag) 뗄 때(unflag)
+    flag:   function () { tone(660, 0.05, 'square', 0.08, 0, 880); },
+    unflag: function () { tone(440, 0.05, 'square', 0.07, 0, 300); },
+    // 지뢰 폭발: 낮은 쿵 소리 + 짧게 잦아드는 에코 꼬리
+    boom:   function () { tone(70, 0.5, 'sawtooth', 0.22, 0, 30); tone(50, 0.55, 'square', 0.18, 0.04, 24); echo(1400, 0.03, 'square', 0.1, 0, 3, 0.05, 0.5); },
+    // 게임 승리: 음계를 타고 올라간 뒤 마지막 음을 에코로 길게 늘어뜨림
+    win:    function () { var n = [523, 659, 784, 1047, 1319, 1568], i; for (i = 0; i < n.length; i++) tone(n[i], 0.12, 'square', 0.1, i * 0.08); echo(1568, 0.5, 'sine', 0.12, n.length * 0.08, 3, 0.16, 0.5); },
+    // 짝을 맞췄을 때: 디튠한 두 화음을 연달아 ("딩동")
+    match:  function () { dtone(988, 0.16, 'square', 0.12, 0); dtone(1319, 0.22, 'square', 0.12, 0.09); },
+    mismatch: function () { tone(220, 0.22, 'sawtooth', 0.13, 0, 140); },
+    // 카드 뒤집기
+    flip:   function () { tone(500, 0.06, 'square', 0.06, 0, 760); },
+    // 두더지가 쏙 올라옴 / 맞았을 때 통쾌한 "뽕"
+    pop:    function () { tone(320, 0.06, 'sine', 0.07, 0, 520); },
+    bonk:   function () { tone(110, 0.1, 'square', 0.18, 0, 55); tone(1500, 0.025, 'square', 0.08, 0); echo(700, 0.05, 'triangle', 0.05, 0.03, 2, 0.06, 0.5); },
+    tick:   function () { tone(1200, 0.02, 'square', 0.04, 0); }
   };
 
   // 게임 화면 위쪽에 "배경음" 선택 칸을 붙인다. 게임마다 선택을 기억하고, 꺼짐이 기본값.
@@ -240,7 +269,7 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) { if (FX[name]) FX[name](); },
-    version: 25,
+    version: 26,
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -248,7 +277,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 25, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 26, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
