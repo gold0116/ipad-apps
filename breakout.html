@@ -77,34 +77,60 @@
   window.addEventListener('orientationchange', layout, false);
   layout();
 
-  var COLS = 8, BW = 34, BH = 14, GAP = 2, OX = 6, OY = 40;
+  var COLS = 13, BW = 21, BH = 11, GAP = 1, OX = 7, OY = 16;
   var COLORS = ['#e5484d', '#f08a24', '#f5d90a', '#3fb950', '#3b82f6'];
   var MCOLOR = '#8a63d2', XCOLOR = '#e5484d', SCOLOR = '#5a6270', GCOLOR = '#e8b339';
+  var BOSS_W = 160, BOSS_H = 90, BOSS_HP = 64, BOSS_COLOR = '#7a1f2b';
 
-  // 레벨: 8칸짜리 줄 문자열. . 빈칸 / 1-5 색깔 벽돌(1번 맞음) / M 두 번 맞아야 깨짐
-  // / S 강철(공으로는 안 깨지고 레이저로만 깨짐, 단계 클리어 조건에서도 제외) / X 폭발(깨지면 상하좌우 연쇄 파괴)
-  // / G 황금(공·레이저·폭발 전부 안 통하는 완전 장식용 벽돌, 단계 클리어 조건에서도 제외)
-  //
-  // 8번(황금 상자)부터 11번(황금 불꽃)까지 네 개는 공개 Arkanoid 클론
-  // (szejkerek/ArkanoidGameClone)의 스테이지 모양을 참고해서 이 저장소 칸 수(8칸)에
-  // 맞게 새로 짠 것. 그 저장소의 "골드 벽돌"(절대 안 깨짐, 장식용) 개념을 G로 들여왔고,
-  // 아이템 종류(이 저장소가 이미 8종으로 더 많음)나 벽돌 색깔별 점수 차등 같은 건
-  // 그대로 가져오지 않음.
+  // 레벨은 공개 Arkanoid 클론(szejkerek/ArkanoidGameClone)의 오리지널 스테이지
+  // 33개(Stage_0.txt~Stage_32.txt)를 그대로 가져온 것 — 13칸×25줄, 그 저장소
+  // 글자를 그대로 씀(쉼표/따옴표 등 우리 쪽 예약 문자와 안 겹쳐서 번역 없이 바로
+  // 옮김): `*`빈칸, `w/o/t/g/r/b/p/y`색깔 벽돌(1번 맞음), `s`실버(공으로 여러 번
+  // 맞아야 깨짐, hp는 스테이지 번호가 오를수록 2→6으로 늘어남, `silverHp()`),
+  // `x`골드(공·레이저·폭발 전부 안 통하는 완전 장식용 벽돌, 우리 대문자 `G`와
+  // 같은 효과), `i`보스(스테이지 33 한정, 칸 하나가 아니라 그 자리를 중심으로
+  // 큰 벽돌 하나가 생김, 64번 맞아야 깨짐). 대문자 `M`(2타)/`S`(강철·레이저 전용)/
+  // `X`(폭발 연쇄)/숫자 `1`~`5`(단색)는 이 저장소에서 원래 쓰던 표기라 엔진에는
+  // 남겨뒀지만 이 33개 레벨 데이터에는 등장하지 않음.
+  // 파워업(그쪽은 체력/멀티볼/감속 3종뿐)과 벽돌 색깔별 점수 차등은 가져오지
+  // 않음 — 이미 8종인 이 저장소의 아이템이 더 풍부하다고 판단.
   var LEVELS = [
-    ['11111111', '22222222', '33333333', '22222222', '11111111'],
-    ['2.2.2.2.', '.3.3.3.3', '2.2.2.2.', '.3.3.3.3', '2.2.2.2.'],
-    ['..1111..', '.122221.', '12222221', '.122221.', '..1111..'],
-    ['S1111111', 'S2222222', 'S3333333', '11111111', '22222222'],
-    ['11X11X11', '22222222', 'X111111X', '22222222', '11X11X11'],
-    ['MMMMMMMM', '1......1', '1.SSSS.1', '1......1', 'MMMMMMMM'],
-    ['12345432', '.222222.', '..3333..', '...22...', '....1...'],
-    ['S.S.S.S.', '.2.2.2.2', 'S.S.S.S.', '.2.2.2.2', 'S.S.S.S.'],
-    ['GGGGGGGG', '1......1', '1.2222.1', '1......1', '33333333'],
-    ['1......1', '.2....2.', '..3..3..', '...44...', '...55...', '..3..3..', '.2....2.', '1......1'],
-    ['GG....GG', 'G......G', 'G.1111.G', 'G.2222.G', 'G.3333.G', 'G......G', 'GG....GG'],
-    ['G.X..X.G', 'G......G', '.111111.', '.222222.', 'G......G', 'G.X..X.G']
+    ["*************", "*************", "*************", "*************", "sssssssssssss", "rrrrrrrrrrrrr", "yyyyyyyyyyyyy", "bbbbbbbbbbbbb", "ppppppppppppp", "ggggggggggggg", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_0
+    ["*************", "*************", "w************", "wo***********", "wot**********", "wotg*********", "wotgr********", "wotgrb*******", "wotgrbp******", "wotgrbpy*****", "wotgrbpyg****", "wotgrbpygo***", "wotgrbpygot**", "wotgrbpygotg*", "ssssssssssssr", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_1
+    ["*************", "*************", "*************", "ggggggggggggg", "*************", "wwwxxxxxxxxxx", "*************", "rrrrrrrrrrrrr", "*************", "xxxxxxxxxxwww", "*************", "ppppppppppppp", "*************", "bbbxxxxxxxxxx", "*************", "ttttttttttttt", "*************", "xxxxxxxxxxttt", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_2
+    ["*************", "*************", "*************", "*************", "*otgsb*ywotg*", "*tgsbp*wotgo*", "*gsbpy*otgot*", "*sbpyw*tgotg*", "*bpywo*gotgs*", "*pywot*otgsb*", "*ywotg*tgsbp*", "*wotgo*gsbpy*", "*otgot*sbpyw*", "*tgotg*bpywo*", "*gotgs*pywot*", "*otgsb*ywotg*", "*tgsbp*wotgo*", "*gsbpy*otgot*", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_3
+    ["*************", "*************", "***y*****y***", "***y*****y***", "****y***y****", "****y***y****", "***sssssss***", "***sssssss***", "**ssrsssrss**", "**ssrsssrss**", "*sssssssssss*", "*sssssssssss*", "*sssssssssss*", "*sssssssssss*", "*s*s*****s*s*", "*s*s*****s*s*", "****ss*ss****", "****ss*ss****", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_4
+    ["*************", "*************", "*************", "*************", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "b*xoxoxoxox*b", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "b*r*g*t*g*r*b", "o*o*o*o*o*o*o", "b*r*g*t*g*r*b", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_5
+    ["*************", "*************", "*************", "*************", "*****yyp*****", "****yyppb****", "***yyppbbr***", "***yppbbrr***", "**yppbbrrgg**", "**ppbbrrggt**", "**pbbrrggtt**", "**bbrrggtto**", "**brrggttoo**", "**rrggttoow**", "***ggttoow***", "***gttooww***", "****tooww****", "*****oww*****", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_6
+    ["*************", "*************", "*************", "*************", "***x*x*x*x***", "*x*********x*", "*xx*x***x*xx*", "******w******", "*x***xox***x*", "***x**t**x***", "******g******", "***x**r**x***", "*x***xbx***x*", "******p******", "*xx*x***x*xx*", "*x*********x*", "***x*x*x*x***", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_7
+    ["*************", "*************", "*x*x*****x*x*", "*xgx*****xgx*", "*xtx*****xtx*", "*xxx*****xxx*", "*************", "****pwwwy****", "****poooy****", "****pttty****", "****pgggy****", "****prrry****", "****pbbby****", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_8
+    ["*x***********", "*************", "*x***********", "*x***********", "*x*****b*****", "*x****btb****", "*x***btwtb***", "*x**btwtwtb**", "*x*btwtstwtb*", "*x**btwtwtb**", "*x***btwtb***", "*x****btb****", "*x*****b*****", "*x***********", "*x***********", "*x***********", "*xxxxxxxxxxxx", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_9
+    ["*************", "*************", "*************", "*************", "*sssssssssss*", "*s*********s*", "*s*sssssss*s*", "*s*s*****s*s*", "*s*s*sss*s*s*", "*s*s*s*s*s*s*", "*s*s*sss*s*s*", "*s*s*****s*s*", "*s*sssssss*s*", "*s*********s*", "*sssssssssss*", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_10
+    ["*************", "*************", "*************", "*************", "xxxxxxxxxxxxx", "****x*****xp*", "*xw*x*****x**", "*x**x**x**x**", "*x**xg*x**x**", "*x**x**x**x**", "*x*ox**x**x**", "*x**x**x*bx**", "*x**x**x**x**", "*x**x*rx**x**", "*x**x**x**x**", "*xt****x**x**", "*x*****x****y", "*xxxxxxxxxxxx", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_11
+    ["*************", "*************", "*************", "*************", "*yyy*www*yyy*", "*ppp*ooo*ppp*", "*bbb*ttt*bbb*", "*rrr*ggg*rrr*", "*ggg*rrr*ggg*", "*ttt*bbb*ttt*", "*ooo*ppp*ooo*", "*www*yyy*www*", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_12
+    ["*************", "*************", "*************", "*************", "bbbbbbbbbbbbb", "x***********x", "bbbbbbbbbbbbb", "*************", "ossssssssssso", "x***********x", "wwwwwwwwwwwww", "*************", "tssssssssssst", "x***********x", "rrrrrrrrrrrrr", "*************", "rrrrrrrrrrrrr", "x***********x", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_13
+    ["*************", "*************", "*************", "*************", "*************", "*************", "twxtttttttxwt", "twyxtttttxywt", "twyyxtttxyywt", "twyyyxwxyyywt", "twyyyywyyyywt", "twyyyywyyyywt", "twyyyywyyyywt", "tsyyyywyyyyst", "ttsyyywyyystt", "tttsyywyysttt", "ttttsywystttt", "tttttswsttttt", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_14
+    ["*************", "*************", "*************", "******x******", "****ww*ww****", "**ww**x**ww**", "ww**oo*oo**ww", "**oo**x**oo**", "oo**yy*yy**oo", "**yy**x**yy**", "yy**gg*gg**yy", "**gg**x**gg**", "gg**rr*rr**gg", "**rr**x**rr**", "rr**bb*bb**rr", "**bb*****bb**", "bb*********bb", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_15
+    ["*************", "*************", "*************", "*************", "******s******", "***bbbsggg***", "**bbbwwwggg**", "**bbwwwwwgg**", "*bbbwwwwwggg*", "*bbbwwwwwggg*", "*bbbwwwwwggg*", "*s**s*s*s**w*", "******s******", "******s******", "******s******", "****y*y******", "****yyy******", "*****y*******", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_16
+    ["*************", "*************", "*************", "*************", "o*xyyyyyyyx*o", "o*xxyyyyyxx*o", "o*x*xyyyx*x*o", "o*x*pxyxt*x*o", "o*x*p*s*t*x*o", "o*x*p*g*t*x*o", "o*x*p*g*t*x*o", "o*x*p*g*t*x*o", "o*x*p*g*t*x*o", "oxxxp*g*txxxo", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_17
+    ["*************", "*************", "*************", "*************", "**xxxxxxxxx**", "**grbpxpbrg**", "**grbpxpbrg**", "**grbpxpbrg**", "**grbpypbrg**", "**grbpxpbrg**", "**grbpxpbrg**", "**grbpxpbrg**", "**xxxxxxxxx**", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_18
+    ["*************", "*************", "*************", "*************", "xwxoxtxgxrxbx", "xpxsxsxsxsxyx", "*************", "xpx*x*x*x*x*x", "x*xpx*x*x*x*x", "x*x*xpx*x*x*x", "x*x*x*xpx*x*x", "x*x*x*x*xpx*x", "***********p*", "**x*x*x*xpx**", "**x*x*xpx*x**", "**x*xpx*x*x**", "***px*x*x****", "*p****x******", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_19
+    ["*************", "*************", "*************", "*************", "*xooooooooox*", "*x*********x*", "*x*xxxxxxx*x*", "*x*x*****x*x*", "*x*x*****x*x*", "*x*x*rrr*x*x*", "*x*x*ggg*x*x*", "*x*x*bbb*x*x*", "*x*x*www*x*x*", "*x*x*****x*x*", "*x*xtttttx*x*", "*x*********x*", "*x*********x*", "*xxxxxxxxxxx*", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_20
+    ["*************", "*************", "*************", "*************", "yyyyyyyyyyyyy", "yyyyyyyyyyyyy", "*************", "rrx*xrrrx*xrr", "rrx*xrrrx*xrr", "rrx*xrrrx*xrr", "rrx*xrrrx*xrr", "*************", "wwwwwwwwwwwww", "wwwwwwwwwwwww", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_21
+    ["*************", "*************", "*************", "*************", "ttttttttttttt", "*************", "**sss*sss*sss", "**sgs*sgs*sgs", "**sss*sss*sss", "*************", "*sss*sss*sss*", "*srs*srs*srs*", "*sss*sss*sss*", "*************", "sss*sss*sss**", "sbs*sbs*sbs**", "sss*sss*sss**", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_22
+    ["*************", "*************", "*************", "*************", "*************", "*************", "*************", "*****www*****", "*****www*****", "*****www*****", "****wwwww****", "****wbwbw****", "***wbbwbbw***", "***bbbbbbb***", "**bbbbbbbbb**", "**bbbbbbbbb**", "*bbbbbbbbbbb*", "bbbbbbbbbbbbb", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_23
+    ["*************", "*************", "*************", "*************", "rrrrrrrrrrrrr", "ggggggggggggg", "bbbbbbbbbbbbb", "xxxxx***xxxxx", "xrrrx***xbbbx", "xrrrx***xbbbx", "x***********x", "x***********x", "x***xgggx***x", "x***xgggx***x", "xsssxxxxxsssx", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_24
+    ["*************", "*************", "*************", "*************", "**xsssx******", "*x*****x*****", "x**ttt**x****", "x*ggggg*x****", "x*bbbbb*x****", "x**ppp**x****", "*x*****x*****", "**xxxxx******", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_25
+    ["*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "sssssssssssss", "yyyyyyyyyyyyy", "sssssssssssss", "*************", "sssssssssssss", "rrrrrrrrrrrrr", "sssssssssssss", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_26
+    ["*************", "*************", "*************", "bbbbbbbbbbbbb", "bxxxxpxpxxxxb", "bx*********xb", "bxp*******pxb", "bxpp*****ppxb", "bxppp***pppxb", "*bxppp*pppxb*", "**bxpppppxb**", "***bxpppxb***", "****bxpxb****", "*****bpb*****", "******b******", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_27
+    ["*************", "*************", "*************", "*************", "yyyyyx*xyyyyy", "pppppx*xppppp", "xxwxxx*xxxwxx", "bbbbbx*xbbbbb", "rrrrrx*xrrrrr", "gggggx*xggggg", "sswssx*xsswss", "tttttx*xttttt", "ooooox*xooooo", "wwwwwx*xwwwww", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_28
+    ["*************", "*************", "*************", "*************", "yp***********", "ypbr*********", "ypbrgt*******", "ypbrgtow*****", "ypbrgtowyp***", "spbrgtowypbr*", "*xsrgtowypbrg", "***xstowypbrg", "*****xswypbrg", "*******xspbrg", "*********xsrg", "***********xs", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_29
+    ["*************", "*************", "*************", "*************", "g*r*b*p*y*w*o", "s*s*s*s*s*s*s", "*b*r*g*t*o*w*", "*s*s*s*s*s*s*", "t*g*r*b*p*y*w", "s*s*s*s*s*s*s", "*p*b*r*g*t*o*", "*s*s*s*s*s*s*", "o*t*g*r*b*p*y", "s*s*s*s*s*s*s", "*y*p*b*r*g*t*", "*s*s*s*s*s*s*", "w*o*t*g*r*b*p", "s*s*s*s*s*s*s", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_30
+    ["*************", "*************", "*************", "*************", "**x*x*x*x*x**", "**x*x*x*x*x**", "**x*x*x*xgg**", "**x*x*x*x*x**", "**x*x*xrrrr**", "**x*x*x*x*x**", "**x*xbbbbbb**", "**x*x*x*x*x**", "**xpppppppp**", "**x*x*x*x*x**", "**yyyyyyyyy**", "**sssssssss**", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"],  // Stage_31
+    ["*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "******i******", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************", "*************"]  // Stage_32
   ];
-  var LEVEL_NAMES = ['기본', '체크무늬', '다이아몬드', '강철벽', '폭발 벽돌', '강철 상자', '피라미드', '강철 기둥', '황금 상자', '지그재그', '황금 격자', '황금 불꽃'];
+  var LEVEL_NAMES = ["스테이지 1", "스테이지 2", "스테이지 3", "스테이지 4", "스테이지 5", "스테이지 6", "스테이지 7", "스테이지 8", "스테이지 9", "스테이지 10", "스테이지 11", "스테이지 12", "스테이지 13", "스테이지 14", "스테이지 15", "스테이지 16", "스테이지 17", "스테이지 18", "스테이지 19", "스테이지 20", "스테이지 21", "스테이지 22", "스테이지 23", "스테이지 24", "스테이지 25", "스테이지 26", "스테이지 27", "스테이지 28", "스테이지 29", "스테이지 30", "스테이지 31", "스테이지 32", "스테이지 33 (보스)"];
+  function silverHp(levelIdx) { return 2 + Math.floor((levelIdx + 1) / 8); }
 
   var ITEM_TYPES = ['expand', 'multi', 'laser', 'catch', 'slow', 'through', 'life', 'score2'];
   var ITEM_WEIGHT = { expand: 14, multi: 12, laser: 8, catch: 10, slow: 14, through: 6, life: 5, score2: 12 };
@@ -121,13 +147,18 @@
 
   function makeBall(x, y, vx, vy) { return { x: x, y: y, vx: vx, vy: vy, r: 5, stuck: false, trail: [], unstuckT: 600, lastUX: x, lastUY: y }; }
 
-  function charToBrick(ch, r, c) {
+  var ARK_COLOR = { w: '#eceef1', o: '#f08a24', t: '#30d5c8', g: '#3fb950', r: '#e5484d', b: '#3b82f6', p: '#e056c4', y: '#f5d90a' };
+  var SILVER_COLOR = '#9aa5b1';
+
+  function charToBrick(ch, r, c, levelIdx) {
     var x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
-    if (ch === '.') return null;
+    if (ch === '.' || ch === '*' || ch === 'i') return null;
     if (ch === 'S') return { x: x, y: y, r: r, c: c, type: 'steel', hp: 1, steelHp: 3, color: SCOLOR };
-    if (ch === 'G') return { x: x, y: y, r: r, c: c, type: 'gold', hp: 1, color: GCOLOR };
+    if (ch === 'G' || ch === 'x') return { x: x, y: y, r: r, c: c, type: 'gold', hp: 1, color: GCOLOR };
     if (ch === 'X') return { x: x, y: y, r: r, c: c, type: 'explosive', hp: 1, color: XCOLOR };
     if (ch === 'M') return { x: x, y: y, r: r, c: c, type: 'normal', hp: 2, color: MCOLOR };
+    if (ch === 's') return { x: x, y: y, r: r, c: c, type: 'normal', hp: silverHp(levelIdx), color: SILVER_COLOR };
+    if (ARK_COLOR[ch]) return { x: x, y: y, r: r, c: c, type: 'normal', hp: 1, color: ARK_COLOR[ch] };
     var n = parseInt(ch, 10);
     if (n >= 1 && n <= 5) return { x: x, y: y, r: r, c: c, type: 'normal', hp: 1, color: COLORS[n - 1] };
     return null;
@@ -135,14 +166,21 @@
   function buildBricks(idx) {
     var rows = LEVELS[idx % LEVELS.length], repeat = Math.floor(idx / LEVELS.length);
     bricks = []; grid = [];
+    var bossR = -1, bossC = -1;
     for (var r = 0; r < rows.length; r++) {
       grid.push([]);
       for (var c = 0; c < COLS; c++) {
-        var b = charToBrick(rows[r].charAt(c), r, c);
+        var ch = rows[r].charAt(c);
+        if (ch === 'i') { bossR = r; bossC = c; }
+        var b = charToBrick(ch, r, c, idx);
         if (b && b.type === 'normal' && repeat > 0 && Math.random() < 0.15 * repeat) b.hp = Math.min(3, b.hp + 1);
         grid[r].push(b);
         if (b) bricks.push(b);
       }
+    }
+    if (bossR >= 0) {
+      var cx = OX + bossC * (BW + GAP) + BW / 2, cy = OY + bossR * (BH + GAP) + BH / 2;
+      bricks.push({ x: cx - BOSS_W / 2, y: cy - BOSS_H / 2, r: -1, c: -1, type: 'boss', hp: BOSS_HP, w: BOSS_W, h: BOSS_H, color: BOSS_COLOR });
     }
   }
   function removeBrick(b) {
@@ -152,7 +190,7 @@
   }
   function destroyBrick(b, viaExplosion) {
     removeBrick(b);
-    burst(b.x + BW / 2, b.y + BH / 2, [b.color, '#fff'], viaExplosion ? 8 : 14);
+    burst(b.x + (b.w || BW) / 2, b.y + (b.h || BH) / 2, [b.color, '#fff'], viaExplosion ? 8 : 14);
     if (b.type === 'explosive') {
       var d = [[-1, 0], [1, 0], [0, -1], [0, 1]];
       for (var i = 0; i < d.length; i++) {
@@ -179,7 +217,7 @@
     }
     var r = Math.random() * total, acc = 0, chosen = pool[0].t;
     for (i = 0; i < pool.length; i++) { acc += pool[i].w; if (r <= acc) { chosen = pool[i].t; break; } }
-    items.push({ x: b.x + BW / 2, y: b.y + BH / 2, vy: 0.085, type: chosen });
+    items.push({ x: b.x + (b.w || BW) / 2, y: b.y + (b.h || BH) / 2, vy: 0.085, type: chosen });
   }
   function applyItem(type) {
     SFX.play('item');
@@ -236,7 +274,7 @@
       var hit = false;
       for (var j = bricks.length - 1; j >= 0; j--) {
         var b = bricks[j];
-        if (bo.x >= b.x && bo.x <= b.x + BW && bo.y >= b.y && bo.y <= b.y + BH) {
+        if (bo.x >= b.x && bo.x <= b.x + (b.w || BW) && bo.y >= b.y && bo.y <= b.y + (b.h || BH)) {
           if (b.type === 'gold') {
             SFX.play('bonk');
           } else if (b.type === 'steel') {
@@ -244,7 +282,7 @@
             if (b.steelHp <= 0) { addScore(20); SFX.play('coin'); destroyBrick(b); }
           } else {
             b.hp--;
-            if (b.hp <= 0) { addScore(10); SFX.play('coin'); maybeSpawnItem(b); destroyBrick(b); } else SFX.play('drop');
+            if (b.hp <= 0) { addScore(b.type === 'boss' ? 500 : 10); SFX.play(b.type === 'boss' ? 'win' : 'coin'); maybeSpawnItem(b); destroyBrick(b); } else SFX.play('drop');
           }
           updateInfo(); hit = true; break;
         }
@@ -278,11 +316,12 @@
     }
     for (var bi = bricks.length - 1; bi >= 0; bi--) {
       var b = bricks[bi];
-      if (nx + ball.r > b.x && nx - ball.r < b.x + BW && ny + ball.r > b.y && ny - ball.r < b.y + BH) {
+      var bw = b.w || BW, bh = b.h || BH;
+      if (nx + ball.r > b.x && nx - ball.r < b.x + bw && ny + ball.r > b.y && ny - ball.r < b.y + bh) {
         var indestructible = b.type === 'steel' || b.type === 'gold', through = effects.through > 0 && !indestructible;
         if (!through) {
-          var ox = Math.min(nx + ball.r - b.x, b.x + BW - (nx - ball.r));
-          var oy = Math.min(ny + ball.r - b.y, b.y + BH - (ny - ball.r));
+          var ox = Math.min(nx + ball.r - b.x, b.x + bw - (nx - ball.r));
+          var oy = Math.min(ny + ball.r - b.y, b.y + bh - (ny - ball.r));
           // 거의 정확히 모서리에 맞으면(ox,oy가 비슷하면) 한 축만 뒤집지 않고 둘 다
           // 뒤집는다. 한 축만 뒤집으면 모서리(특히 강철/황금 벽돌 사이 좁은 틈)에서
           // 공이 좌우/상하로 왔다갔다만 하며 제자리에 박히는 경우가 있었음.
@@ -291,8 +330,8 @@
         }
         if (!indestructible) {
           b.hp--;
-          if (b.hp <= 0) { addScore(10); SFX.play('coin'); maybeSpawnItem(b); destroyBrick(b); }
-          else { addScore(5); SFX.play('drop'); }
+          if (b.hp <= 0) { addScore(b.type === 'boss' ? 500 : 10); SFX.play(b.type === 'boss' ? 'win' : 'coin'); maybeSpawnItem(b); destroyBrick(b); }
+          else { addScore(b.type === 'boss' ? 8 : 5); SFX.play('drop'); }
         }
         updateInfo();
         if (!through) { nx = ball.x; ny = ball.y; break; }
@@ -338,7 +377,7 @@
       var sb = [];
       for (var i = 0; i < bricks.length; i++) {
         var b = bricks[i];
-        sb.push({ x: b.x, y: b.y, r: b.r, c: b.c, type: b.type, hp: b.hp, steelHp: b.steelHp, color: b.color });
+        sb.push({ x: b.x, y: b.y, r: b.r, c: b.c, type: b.type, hp: b.hp, steelHp: b.steelHp, color: b.color, w: b.w, h: b.h });
       }
       localStorage.setItem(SK, JSON.stringify({ v: 1, score: score, lives: lives, stage: stage, levelIdx: levelIdx, bricks: sb, px: px }));
     } catch (e) {}
@@ -350,8 +389,8 @@
     for (var r = 0; r < rows; r++) { grid.push([]); for (var c = 0; c < COLS; c++) grid[r].push(null); }
     for (var i = 0; i < saved.bricks.length; i++) {
       var sb = saved.bricks[i];
-      var b = { x: sb.x, y: sb.y, r: sb.r, c: sb.c, type: sb.type, hp: sb.hp, steelHp: sb.steelHp, color: sb.color };
-      bricks.push(b); if (grid[b.r]) grid[b.r][b.c] = b;
+      var b = { x: sb.x, y: sb.y, r: sb.r, c: sb.c, type: sb.type, hp: sb.hp, steelHp: sb.steelHp, color: sb.color, w: sb.w, h: sb.h };
+      bricks.push(b); if (grid[b.r] && b.r >= 0) grid[b.r][b.c] = b;
     }
     px = saved.px; effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
     items = []; bolts = [];
@@ -427,6 +466,18 @@
       ctx.beginPath(); ctx.moveTo(b.x, b.y + BH / 2); ctx.lineTo(b.x + BW, b.y + BH / 2); ctx.stroke();
       ctx.strokeStyle = 'rgba(0,0,0,.2)';
       ctx.strokeRect(b.x + 1, b.y + 1, BW - 2, BH - 2);
+      return;
+    }
+    if (b.type === 'boss') {
+      var bw = b.w, bh = b.h, pct = Math.max(0, b.hp / BOSS_HP);
+      ctx.fillStyle = BOSS_COLOR; ctx.fillRect(b.x, b.y, bw, bh);
+      ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
+      ctx.strokeRect(b.x + 1.5, b.y + 1.5, bw - 3, bh - 3);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('BOSS', b.x + bw / 2, b.y + bh / 2 - 6);
+      ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(b.x + 8, b.y + bh - 14, bw - 16, 6);
+      ctx.fillStyle = '#ff6b6b'; ctx.fillRect(b.x + 8, b.y + bh - 14, (bw - 16) * pct, 6);
       return;
     }
     ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, BW, BH);
@@ -590,7 +641,7 @@
   (function () {
     var sel = $('lvSel'), i, o;
     for (i = 0; i < LEVELS.length; i++) {
-      o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + '. ' + (LEVEL_NAMES[i] || ''); sel.appendChild(o);
+      o = document.createElement('option'); o.value = i; o.textContent = LEVEL_NAMES[i] || ('레벨 ' + (i + 1)); sel.appendChild(o);
     }
   })();
 
