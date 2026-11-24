@@ -1,5 +1,5 @@
 CACHE MANIFEST
-# v63 2026-11-24
+# v64 2026-11-24
 
 emoji.js?v=16
 sound.js?v=26
@@ -31,6 +31,7 @@ memory.html
 draw.html
 mole.html
 slide.html
+trash.html
 style.css?v=16
 
 NETWORK:

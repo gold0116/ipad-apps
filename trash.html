@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>휴지통</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  .grid { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin: 0 -8px; }
+  .tile { width: 50%; padding: 8px; }
+  .tile a { display: block; background: #fff; border-radius: 18px; padding: 28px 8px; text-align: center; font-size: 20px; font-weight: bold; -webkit-box-shadow: 0 2px 6px rgba(0,0,0,.12); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .tile span.ic { display: block; height: 76px; margin: 0 auto 10px; }
+  .tile small { display: block; font-size: 13px; font-weight: normal; color: #777; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 휴지통</div>
+<div class="wrap">
+  <p style="color:#888;font-size:14px;text-align:center;margin:4px 0 16px">홈 화면 메뉴에서 뺐지만 지우진 않은 것들. 주소는 그대로라 여기서 계속 열 수 있음.</p>
+  <div class="grid">
+    <div class="tile"><a href="tictactoe.html"><span class="ic" data-emo="72">⭕</span>틱택토<small>컴퓨터와 대결</small></a></div>
+    <div class="tile"><a href="report.html"><span class="ic" data-emo="72">📋</span>조사 보고서<small>구형 iPad 웹 자료</small></a></div>
+  </div>
+</div>
+<script src="emoji.js?v=16"></script>
+</body>
+</html>
