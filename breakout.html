@@ -12,6 +12,7 @@
   canvas { display: block; margin: 0 auto; background: #1d2330; border-radius: 8px; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; color: #e5484d; height: 28px; margin-top: 6px; }
   .pad { text-align: center; margin-top: 8px; }
+  #cont { display: none; }
 </style>
 </head>
 <body>
@@ -20,12 +21,39 @@
   <div id="info">점수 <b id="sc">0</b> · 목숨 <b id="lv">3</b> · 단계 <b id="st">1</b> · 최고 <b id="best">0</b></div>
   <canvas id="cv" width="300" height="400"></canvas>
   <div id="msg"></div>
-  <div class="pad"><button class="btn gray" id="go">시작</button></div>
-  <p style="text-align:center;color:#888">화면을 좌우로 문질러 받침대 이동 · 터치하면 공 발사</p>
+  <div class="pad">
+    <button class="btn" id="cont">이어하기 (목숨 1)</button>
+    <button class="btn gray" id="go">새 게임</button>
+  </div>
+  <p style="text-align:center;color:#888">좌우로 문질러 받침대 이동 · 터치하면 발사 / 레이저 발사 / 붙은 공 놓기</p>
 </div>
+<script src="sound.js?v=26"></script>
+<script src="touchfx.js?v=2"></script>
 <script>
 (function () {
   var W = 300, H = 400, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var tfx = TouchFX.attach(cv);
+  // 시각 효과(파티클/흔들림/플래시)는 vfx.js(별도 오버레이 캔버스 + 자체 rAF 루프)를
+  // 쓰지 않고, 이 게임 자신의 캔버스/루프 안에서 직접 그린다. 계속 돌아가는 자신의
+  // requestAnimationFrame 루프가 있는 상태에서 vfx.js를 같이 쓰면(오버레이가 또 다른
+  // rAF 루프를 따로 돌림) 화면이 멈춰 버리는 문제를 테스트 중 발견해서 이렇게 피함.
+  var particles = [], flashT = 0, shakeT = 0;
+  function burst(cx, cy, colors, count) {
+    colors = colors || ['#ffd166', '#7ee787', '#5ec9f0'];
+    for (var i = 0; i < (count || 14); i++) {
+      var a = Math.random() * Math.PI * 2, sp = 1.2 + Math.random() * 2.6;
+      particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, r: 1.3 + Math.random() * 1.8, c: colors[i % colors.length] });
+    }
+  }
+  function stepFx() {
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.94; p.vy *= 0.94; p.life -= 0.03;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    if (flashT > 0) flashT = Math.max(0, flashT - 0.08);
+    if (shakeT > 0) shakeT = Math.max(0, shakeT - 0.1);
+  }
   function $(i) { return document.getElementById(i); }
   function layout() {
     var w = Math.min(window.innerWidth - 24, (window.innerHeight - 260) * 0.75, 600);
@@ -36,97 +64,388 @@
   window.addEventListener('orientationchange', layout, false);
   layout();
 
-  var COLS = 8, ROWS = 5, BW = 34, BH = 14, GAP = 2, OX = 6, OY = 40;
+  var COLS = 8, BW = 34, BH = 14, GAP = 2, OX = 6, OY = 40;
   var COLORS = ['#e5484d', '#f08a24', '#f5d90a', '#3fb950', '#3b82f6'];
-  var bricks, px, pw = 56, ph = 10, py = H - 24, ball, score, lives, stage, best = 0, state = 'idle', last = 0;
+  var MCOLOR = '#8a63d2', XCOLOR = '#e5484d', SCOLOR = '#5a6270';
+
+  // 레벨: 8칸짜리 줄 문자열. . 빈칸 / 1-5 색깔 벽돌(1번 맞음) / M 두 번 맞아야 깨짐
+  // / S 강철(공으로는 안 깨지고 레이저로만 깨짐, 단계 클리어 조건에서도 제외) / X 폭발(깨지면 상하좌우 연쇄 파괴)
+  var LEVELS = [
+    ['11111111', '22222222', '33333333', '22222222', '11111111'],
+    ['2.2.2.2.', '.3.3.3.3', '2.2.2.2.', '.3.3.3.3', '2.2.2.2.'],
+    ['..1111..', '.122221.', '12222221', '.122221.', '..1111..'],
+    ['S1111111', 'S2222222', 'S3333333', '11111111', '22222222'],
+    ['11X11X11', '22222222', 'X111111X', '22222222', '11X11X11'],
+    ['MMMMMMMM', '1......1', '1.SSSS.1', '1......1', 'MMMMMMMM'],
+    ['12345432', '.222222.', '..3333..', '...22...', '....1...'],
+    ['S.S.S.S.', '.2.2.2.2', 'S.S.S.S.', '.2.2.2.2', 'S.S.S.S.']
+  ];
+
+  var ITEM_TYPES = ['expand', 'multi', 'laser', 'catch', 'slow', 'through', 'life', 'score2'];
+  var ITEM_WEIGHT = { expand: 14, multi: 12, laser: 8, catch: 10, slow: 14, through: 6, life: 5, score2: 12 };
+  var BADGE = { expand: 'E', multi: 'D', laser: 'L', catch: 'C', slow: 'S', through: 'B', life: '+1', score2: 'x2' };
+  var ICOLOR = { expand: '#3fb950', multi: '#f5d90a', laser: '#e5484d', catch: '#3b82f6', slow: '#8a63d2', through: '#f08a24', life: '#ff6b9d', score2: '#5ec9f0' };
+  var MAXDUR = { expand: 12000, slow: 8000, catch: 12000, laser: 10000, through: 6000, score2: 15000 };
+  var HUD_ORDER = ['expand', 'slow', 'catch', 'laser', 'through', 'score2'];
+
+  var SK = 'breakoutSave';
+  var bricks, grid, px, pw = 56, BASE_PW = 56, ph = 10, py = H - 24;
+  var balls, items, bolts, levelIdx, score, lives, stage, best = 0, state = 'idle', last = 0, lastBoltAt = 0;
+  var effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 };
   try { best = parseInt(localStorage.getItem('bestBreakout') || '0', 10) || 0; } catch (e) {}
 
-  function buildBricks() {
-    bricks = [];
-    for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
-      // 단계가 오를수록 일부 벽돌은 두 번 쳐야 깨진다
-      var hp = (stage > 1 && (r + c) % (stage > 2 ? 2 : 3) === 0) ? 2 : 1;
-      bricks.push({ x: OX + c * (BW + GAP), y: OY + r * (BH + GAP), c: COLORS[r], hp: hp });
+  function makeBall(x, y, vx, vy) { return { x: x, y: y, vx: vx, vy: vy, r: 5, stuck: false, trail: [] }; }
+
+  function charToBrick(ch, r, c) {
+    var x = OX + c * (BW + GAP), y = OY + r * (BH + GAP);
+    if (ch === '.') return null;
+    if (ch === 'S') return { x: x, y: y, r: r, c: c, type: 'steel', hp: 1, steelHp: 3, color: SCOLOR };
+    if (ch === 'X') return { x: x, y: y, r: r, c: c, type: 'explosive', hp: 1, color: XCOLOR };
+    if (ch === 'M') return { x: x, y: y, r: r, c: c, type: 'normal', hp: 2, color: MCOLOR };
+    var n = parseInt(ch, 10);
+    if (n >= 1 && n <= 5) return { x: x, y: y, r: r, c: c, type: 'normal', hp: 1, color: COLORS[n - 1] };
+    return null;
+  }
+  function buildBricks(idx) {
+    var rows = LEVELS[idx % LEVELS.length], repeat = Math.floor(idx / LEVELS.length);
+    bricks = []; grid = [];
+    for (var r = 0; r < rows.length; r++) {
+      grid.push([]);
+      for (var c = 0; c < COLS; c++) {
+        var b = charToBrick(rows[r].charAt(c), r, c);
+        if (b && b.type === 'normal' && repeat > 0 && Math.random() < 0.15 * repeat) b.hp = Math.min(3, b.hp + 1);
+        grid[r].push(b);
+        if (b) bricks.push(b);
+      }
     }
   }
-  function resetBall() {
-    state = 'ready';
-    ball = { x: px, y: py - 8, vx: 0, vy: 0, r: 5 };
+  function removeBrick(b) {
+    var i = bricks.indexOf(b);
+    if (i >= 0) bricks.splice(i, 1);
+    if (grid[b.r]) grid[b.r][b.c] = null;
   }
-  function launch() {
-    var sp = 0.19 + stage * 0.015;
-    var a = (Math.random() * 0.8 - 0.4);
-    ball.vx = Math.sin(a) * sp; ball.vy = -Math.cos(a) * sp;
-    state = 'play'; $('msg').textContent = '';
+  function destroyBrick(b, viaExplosion) {
+    removeBrick(b);
+    burst(b.x + BW / 2, b.y + BH / 2, [b.color, '#fff'], viaExplosion ? 8 : 14);
+    if (b.type === 'explosive') {
+      var d = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      for (var i = 0; i < d.length; i++) {
+        var rr = b.r + d[i][0], cc = b.c + d[i][1];
+        if (grid[rr] && grid[rr][cc] && grid[rr][cc].type !== 'steel') destroyBrick(grid[rr][cc], true);
+      }
+    }
   }
+  function remainingBreakable() {
+    var n = 0;
+    for (var i = 0; i < bricks.length; i++) if (bricks[i].type !== 'steel') n++;
+    return n;
+  }
+
+  function addScore(n) { score += Math.round(n * (effects.score2 > 0 ? 2 : 1)); }
+
+  function maybeSpawnItem(b) {
+    if (Math.random() > 0.22) return;
+    var pool = [], total = 0, i;
+    for (i = 0; i < ITEM_TYPES.length; i++) {
+      var t = ITEM_TYPES[i], w = ITEM_WEIGHT[t];
+      if (t === 'life') w *= Math.max(0.15, 1 - (lives - 1) * 0.3);
+      pool.push({ t: t, w: w }); total += w;
+    }
+    var r = Math.random() * total, acc = 0, chosen = pool[0].t;
+    for (i = 0; i < pool.length; i++) { acc += pool[i].w; if (r <= acc) { chosen = pool[i].t; break; } }
+    items.push({ x: b.x + BW / 2, y: b.y + BH / 2, vy: 0.085, type: chosen });
+  }
+  function applyItem(type) {
+    SFX.play('item');
+    if (type === 'expand') effects.expand = MAXDUR.expand;
+    else if (type === 'slow') effects.slow = MAXDUR.slow;
+    else if (type === 'catch') effects.catch = MAXDUR.catch;
+    else if (type === 'laser') effects.laser = MAXDUR.laser;
+    else if (type === 'through') effects.through = MAXDUR.through;
+    else if (type === 'score2') effects.score2 = MAXDUR.score2;
+    else if (type === 'life') { lives++; updateInfo(); }
+    else if (type === 'multi') {
+      if (balls.length < 6) {
+        var b0 = balls[0], angs = [-0.4, 0.4];
+        for (var i = 0; i < angs.length && balls.length < 6; i++) {
+          var th = angs[i], vx = b0.vx * Math.cos(th) - b0.vy * Math.sin(th), vy = b0.vx * Math.sin(th) + b0.vy * Math.cos(th);
+          balls.push(makeBall(b0.x, b0.y, vx, vy));
+        }
+      }
+    }
+  }
+  function tickEffects(dt) {
+    var wasCatch = effects.catch > 0, k;
+    for (k in effects) if (effects[k] > 0) { effects[k] -= dt; if (effects[k] < 0) effects[k] = 0; }
+    pw = BASE_PW * (effects.expand > 0 ? 1.6 : 1);
+    if (px < pw / 2) px = pw / 2; if (px > W - pw / 2) px = W - pw / 2;
+    if (wasCatch && effects.catch <= 0) for (var i = 0; i < balls.length; i++) if (balls[i].stuck) releaseStuckBall(balls[i]);
+  }
+  function releaseStuckBall(ball) {
+    var off = (ball.x - px) / (pw / 2); if (off > 1) off = 1; if (off < -1) off = -1;
+    var sp = 0.19 + stage * 0.015, a = off * 1.0;
+    ball.vx = Math.sin(a) * sp; ball.vy = -Math.cos(a) * sp; ball.stuck = false;
+  }
+  function stepItems(dt) {
+    for (var i = items.length - 1; i >= 0; i--) {
+      var it = items[i]; it.y += it.vy * dt;
+      if (it.y - 7 > py + ph) { items.splice(i, 1); continue; }
+      if (it.y + 7 >= py && it.y - 7 <= py + ph && it.x + 11 >= px - pw / 2 && it.x - 11 <= px + pw / 2) {
+        burst(it.x, it.y, [ICOLOR[it.type], '#fff'], 10);
+        applyItem(it.type); items.splice(i, 1);
+      }
+    }
+  }
+  function maybeFireLaser() {
+    if (effects.laser <= 0) return;
+    var t = Date.now(); if (t - lastBoltAt < 250) return;
+    lastBoltAt = t;
+    bolts.push({ x: px - pw / 2 + 6, y: py }); bolts.push({ x: px + pw / 2 - 6, y: py });
+    SFX.play('rotate');
+  }
+  function stepBolts(dt) {
+    for (var i = bolts.length - 1; i >= 0; i--) {
+      var bo = bolts[i]; bo.y -= 0.35 * dt;
+      if (bo.y < 0) { bolts.splice(i, 1); continue; }
+      var hit = false;
+      for (var j = bricks.length - 1; j >= 0; j--) {
+        var b = bricks[j];
+        if (bo.x >= b.x && bo.x <= b.x + BW && bo.y >= b.y && bo.y <= b.y + BH) {
+          if (b.type === 'steel') {
+            b.steelHp--; SFX.play('drop');
+            if (b.steelHp <= 0) { addScore(20); SFX.play('coin'); destroyBrick(b); }
+          } else {
+            b.hp--;
+            if (b.hp <= 0) { addScore(10); SFX.play('coin'); maybeSpawnItem(b); destroyBrick(b); } else SFX.play('drop');
+          }
+          updateInfo(); hit = true; break;
+        }
+      }
+      if (hit) bolts.splice(i, 1);
+    }
+  }
+
+  function stepBall(ball, dt) {
+    if (ball.stuck) {
+      ball.x = Math.max(px - pw / 2 + ball.r, Math.min(px + pw / 2 - ball.r, ball.x));
+      ball.y = py - ball.r;
+      return true;
+    }
+    var mul = effects.slow > 0 ? 0.6 : 1;
+    var nx = ball.x + ball.vx * dt * mul, ny = ball.y + ball.vy * dt * mul;
+    if (nx < ball.r) { nx = ball.r; ball.vx = Math.abs(ball.vx); SFX.play('move'); }
+    if (nx > W - ball.r) { nx = W - ball.r; ball.vx = -Math.abs(ball.vx); SFX.play('move'); }
+    if (ny < ball.r) { ny = ball.r; ball.vy = Math.abs(ball.vy); SFX.play('move'); }
+    if (ball.vy > 0 && ny + ball.r >= py && ball.y + ball.r <= py + 4 && nx >= px - pw / 2 - 3 && nx <= px + pw / 2 + 3) {
+      if (effects.catch > 0) {
+        ball.stuck = true; ball.vx = 0; ball.vy = 0; ny = py - ball.r;
+        nx = Math.max(px - pw / 2 + ball.r, Math.min(px + pw / 2 - ball.r, nx));
+        SFX.play('clack');
+      } else {
+        var off = (nx - px) / (pw / 2); if (off > 1) off = 1; if (off < -1) off = -1;
+        var sp = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy), a = off * 1.0;
+        ball.vx = Math.sin(a) * sp; ball.vy = -Math.cos(a) * sp;
+        ny = py - ball.r; SFX.play('rotate');
+      }
+    }
+    for (var bi = bricks.length - 1; bi >= 0; bi--) {
+      var b = bricks[bi];
+      if (nx + ball.r > b.x && nx - ball.r < b.x + BW && ny + ball.r > b.y && ny - ball.r < b.y + BH) {
+        var isSteel = b.type === 'steel', through = effects.through > 0 && !isSteel;
+        if (!through) {
+          var ox = Math.min(nx + ball.r - b.x, b.x + BW - (nx - ball.r));
+          var oy = Math.min(ny + ball.r - b.y, b.y + BH - (ny - ball.r));
+          if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
+        }
+        if (!isSteel) {
+          b.hp--;
+          if (b.hp <= 0) { addScore(10); SFX.play('coin'); maybeSpawnItem(b); destroyBrick(b); }
+          else { addScore(5); SFX.play('drop'); }
+        }
+        updateInfo();
+        if (!through) { nx = ball.x; ny = ball.y; break; }
+      }
+    }
+    ball.x = nx; ball.y = ny;
+    ball.trail.push({ x: nx, y: ny, life: 1 }); if (ball.trail.length > 8) ball.trail.shift();
+    for (var ti = 0; ti < ball.trail.length; ti++) ball.trail[ti].life -= 0.12;
+    if (ball.y > H + 10) return false;
+    return true;
+  }
+
+  function resetBall() { state = 'ready'; balls = [makeBall(px, py - 8, 0, 0)]; }
   function newGame() {
-    score = 0; lives = 3; stage = 1; px = W / 2;
-    buildBricks(); resetBall(); $('msg').textContent = '터치하면 공 발사';
+    try { localStorage.removeItem(SK); } catch (e) {}
+    $('cont').style.display = 'none';
+    score = 0; lives = 3; stage = 1; levelIdx = 0; px = W / 2;
+    effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
+    items = []; bolts = [];
+    buildBricks(levelIdx); resetBall(); $('msg').textContent = '터치하면 공 발사';
     updateInfo(); draw();
   }
   function updateInfo() {
-    $('sc').textContent = score; $('lv').textContent = lives; $('st').textContent = stage; $('best').textContent = best;
+    $('sc').textContent = score; $('lv').textContent = lives; $('st').textContent = stage; $('best').textContent = Math.max(best, score);
   }
   function saveBest() {
     if (score > best) { best = score; try { localStorage.setItem('bestBreakout', best); } catch (e) {} }
   }
-  function step(dt) {
-    if (state === 'ready') { ball.x = px; ball.y = py - 8; return; }
-    if (state !== 'play') return;
-    var nx = ball.x + ball.vx * dt, ny = ball.y + ball.vy * dt;
-    if (nx < ball.r) { nx = ball.r; ball.vx = Math.abs(ball.vx); SFX.play('move'); }
-    if (nx > W - ball.r) { nx = W - ball.r; ball.vx = -Math.abs(ball.vx); SFX.play('move'); }
-    if (ny < ball.r) { ny = ball.r; ball.vy = Math.abs(ball.vy); SFX.play('move'); }
-    // 받침대
-    if (ball.vy > 0 && ny + ball.r >= py && ball.y + ball.r <= py + 4 && nx >= px - pw / 2 - 3 && nx <= px + pw / 2 + 3) {
-      var off = (nx - px) / (pw / 2);
-      if (off > 1) off = 1; if (off < -1) off = -1;
-      var sp = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-      var a = off * 1.0;
-      ball.vx = Math.sin(a) * sp; ball.vy = -Math.cos(a) * sp;
-      ny = py - ball.r; SFX.play('rotate');
-    }
-    // 벽돌
-    for (var i = 0; i < bricks.length; i++) {
-      var b = bricks[i];
-      if (nx + ball.r > b.x && nx - ball.r < b.x + BW && ny + ball.r > b.y && ny - ball.r < b.y + BH) {
-        var ox = Math.min(nx + ball.r - b.x, b.x + BW - (nx - ball.r));
-        var oy = Math.min(ny + ball.r - b.y, b.y + BH - (ny - ball.r));
-        if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
-        b.hp--;
-        if (b.hp <= 0) { bricks.splice(i, 1); score += 10; SFX.play('coin'); } else { score += 5; SFX.play('drop'); }
-        updateInfo();
-        nx = ball.x; ny = ball.y;
-        break;
+  function saveGame() {
+    try {
+      var sb = [];
+      for (var i = 0; i < bricks.length; i++) {
+        var b = bricks[i];
+        sb.push({ x: b.x, y: b.y, r: b.r, c: b.c, type: b.type, hp: b.hp, steelHp: b.steelHp, color: b.color });
       }
+      localStorage.setItem(SK, JSON.stringify({ v: 1, score: score, lives: lives, stage: stage, levelIdx: levelIdx, bricks: sb, px: px }));
+    } catch (e) {}
+  }
+  function restoreGame(saved) {
+    score = saved.score; lives = saved.lives; stage = saved.stage; levelIdx = saved.levelIdx || 0;
+    var rows = LEVELS[levelIdx % LEVELS.length].length;
+    bricks = []; grid = [];
+    for (var r = 0; r < rows; r++) { grid.push([]); for (var c = 0; c < COLS; c++) grid[r].push(null); }
+    for (var i = 0; i < saved.bricks.length; i++) {
+      var sb = saved.bricks[i];
+      var b = { x: sb.x, y: sb.y, r: sb.r, c: sb.c, type: sb.type, hp: sb.hp, steelHp: sb.steelHp, color: sb.color };
+      bricks.push(b); if (grid[b.r]) grid[b.r][b.c] = b;
     }
-    ball.x = nx; ball.y = ny;
-    if (bricks.length === 0) {
-      saveBest(); stage++; score += 50; SFX.play('line');
-      buildBricks(); resetBall(); $('msg').textContent = '단계 ' + stage + '! 터치하면 발사';
-      updateInfo(); return;
+    px = saved.px; effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
+    items = []; bolts = [];
+    resetBall();
+    updateInfo(); $('msg').textContent = '이어서 합니다 · 터치하면 발사';
+  }
+
+  function onAllBallsLost() {
+    lives--; SFX.play('hit'); updateInfo();
+    if (lives <= 0) {
+      state = 'over'; saveBest();
+      try { localStorage.removeItem(SK); } catch (e) {}
+      updateInfo();
+      $('msg').textContent = '게임 오버! 점수 ' + score;
+      SFX.play('over');
+      shakeT = 1; flashT = 1;
+      $('cont').style.display = 'inline-block';
+    } else {
+      effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
+      items = []; bolts = [];
+      resetBall();
+      $('msg').textContent = '목숨 하나 잃음 · 터치하면 발사';
+      shakeT = 1;
+      saveGame();
     }
-    if (ball.y > H + 10) {
-      lives--; SFX.play('hit'); updateInfo();
-      if (lives <= 0) { state = 'over'; saveBest(); updateInfo(); $('msg').textContent = '게임 오버!'; SFX.play('over'); }
-      else { resetBall(); $('msg').textContent = '목숨 하나 잃음 · 터치하면 발사'; }
+  }
+  function onStageClear() {
+    saveBest(); stage++; levelIdx++; addScore(50); SFX.play('line'); SFX.play('win');
+    buildBricks(levelIdx); items = []; bolts = [];
+    resetBall();
+    $('msg').textContent = '단계 ' + stage + '! 터치하면 발사';
+    updateInfo(); saveGame(); celebrate();
+  }
+  function celebrate() {
+    for (var n = 0; n < 6; n++) {
+      (function (n) {
+        setTimeout(function () {
+          burst(Math.random() * W, Math.random() * H, ['#ffd166', '#7ee787', '#5ec9f0', '#f783ac'], 14);
+        }, n * 90);
+      })(n);
+    }
+  }
+
+  function step(dt) {
+    if (state === 'ready') { for (var i = 0; i < balls.length; i++) { balls[i].x = px; balls[i].y = py - 8; } return; }
+    if (state !== 'play') return;
+    tickEffects(dt); stepItems(dt); stepBolts(dt);
+    for (var bi = balls.length - 1; bi >= 0; bi--) if (!stepBall(balls[bi], dt)) balls.splice(bi, 1);
+    if (balls.length === 0) { onAllBallsLost(); return; }
+    if (remainingBreakable() === 0) { onStageClear(); return; }
+  }
+
+  function roundRect(x, y, w, h, rad) {
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  }
+  function drawBrick(b) {
+    if (b.type === 'steel') {
+      ctx.fillStyle = SCOLOR; ctx.fillRect(b.x, b.y, BW, BH);
+      ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y + BH); ctx.lineTo(b.x + BW, b.y); ctx.stroke();
+      return;
+    }
+    ctx.fillStyle = b.color; ctx.fillRect(b.x, b.y, BW, BH);
+    if (b.type === 'explosive') {
+      ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('X', b.x + BW / 2, b.y + BH / 2 + 1);
+    }
+    if (b.hp > 1) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(b.x + 3, b.y + 3, BW - 6, BH - 6); }
+  }
+  function drawCapsule(x, y, type) {
+    var w = 22, h = 14, label = BADGE[type];
+    ctx.fillStyle = ICOLOR[type];
+    roundRect(x - w / 2, y - h / 2, w, h, 5); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold ' + (label.length > 1 ? 10 : 12) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y + 1);
+  }
+  function drawHud() {
+    var x = 6, y = 4;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    for (var i = 0; i < HUD_ORDER.length; i++) {
+      var n = HUD_ORDER[i];
+      if (effects[n] <= 0) continue;
+      ctx.fillStyle = ICOLOR[n]; ctx.fillRect(x, y, 16, 16);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif';
+      ctx.fillText(BADGE[n], x + 2, y + 3);
+      ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(x, y + 16, Math.round(16 * (effects[n] / MAXDUR[n])), 3);
+      x += 20;
     }
   }
   function draw() {
-    ctx.fillStyle = '#1d2330'; ctx.fillRect(0, 0, W, H);
-    for (var i = 0; i < bricks.length; i++) {
-      var b = bricks[i];
-      ctx.fillStyle = b.c; ctx.fillRect(b.x, b.y, BW, BH);
-      if (b.hp > 1) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(b.x + 3, b.y + 3, BW - 6, BH - 6); }
+    ctx.save();
+    if (shakeT > 0) {
+      var m = shakeT * 4;
+      ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
     }
-    ctx.fillStyle = '#d0d7e2'; ctx.fillRect(px - pw / 2, py, pw, ph);
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1d2330'; ctx.fillRect(-8, -8, W + 16, H + 16);
+    var i;
+    for (i = 0; i < bricks.length; i++) drawBrick(bricks[i]);
+    ctx.fillStyle = effects.catch > 0 ? '#8fd3ff' : '#d0d7e2'; ctx.fillRect(px - pw / 2, py, pw, ph);
+    for (i = 0; i < items.length; i++) drawCapsule(items[i].x, items[i].y, items[i].type);
+    ctx.fillStyle = '#ff6b6b';
+    for (i = 0; i < bolts.length; i++) ctx.fillRect(bolts[i].x - 2, bolts[i].y - 6, 4, 10);
+    for (i = 0; i < balls.length; i++) {
+      var ball = balls[i], j;
+      for (j = 0; j < ball.trail.length; j++) {
+        var tp = ball.trail[j];
+        ctx.globalAlpha = Math.max(0, tp.life) * 0.35; ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(tp.x, tp.y, ball.r * 0.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = ball.stuck ? '#ffe066' : '#fff';
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2); ctx.fill();
+    }
+    for (i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    drawHud();
+    if (flashT > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (flashT * 0.25) + ')'; ctx.fillRect(0, 0, W, H); }
+    ctx.restore();
+    tfx.draw(ctx);
   }
   function now() { return Date.now(); }
   function loop() {
     var t = now(), dt = t - last; last = t;
     if (dt > 40) dt = 40; if (dt < 0) dt = 0;
-    step(dt); draw();
+    step(dt); stepFx(); draw();
     frame();
   }
   function frame() {
@@ -139,7 +458,18 @@
     px = (clientX - r.left) / r.width * W;
     if (px < pw / 2) px = pw / 2; if (px > W - pw / 2) px = W - pw / 2;
   }
-  function press() { if (state === 'ready') launch(); }
+  function press() {
+    if (state === 'ready') { launch(); return; }
+    if (state !== 'play') return;
+    var released = false, i;
+    for (i = 0; i < balls.length; i++) if (balls[i].stuck) { releaseStuckBall(balls[i]); released = true; }
+    if (!released) maybeFireLaser();
+  }
+  function launch() {
+    var sp = 0.19 + stage * 0.015, a = (Math.random() * 0.8 - 0.4);
+    balls[0].vx = Math.sin(a) * sp; balls[0].vy = -Math.cos(a) * sp;
+    state = 'play'; $('msg').textContent = '';
+  }
   cv.addEventListener('touchstart', function (e) { e.preventDefault(); setX(e.touches[0].clientX); press(); }, false);
   cv.addEventListener('touchmove', function (e) { e.preventDefault(); setX(e.touches[0].clientX); }, false);
   cv.addEventListener('mousemove', function (e) { setX(e.clientX); }, false);
@@ -150,14 +480,31 @@
     else if (e.keyCode === 39) { px = Math.min(W - pw / 2, px + 18); e.preventDefault(); }
     else if (e.keyCode === 32) { press(); e.preventDefault(); }
   }, false);
+  document.addEventListener('visibilitychange', function () { if (document.hidden && state === 'play') saveGame(); }, false);
   $('go').onclick = newGame;
+  $('cont').onclick = function () {
+    $('cont').style.display = 'none';
+    lives = 1; effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
+    items = []; bolts = [];
+    resetBall();
+    $('msg').textContent = '이어하기! 터치하면 발사';
+    updateInfo(); saveGame();
+  };
 
-  px = W / 2; score = 0; lives = 3; stage = 1; buildBricks(); resetBall(); updateInfo();
-  $('msg').textContent = '시작을 누르세요';
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SK) || 'null'); } catch (e) {}
+  if (saved && saved.v === 1 && saved.bricks && saved.bricks.length && saved.lives > 0) {
+    restoreGame(saved);
+  } else {
+    px = W / 2; score = 0; lives = 3; stage = 1; levelIdx = 0;
+    items = []; bolts = [];
+    buildBricks(levelIdx); resetBall();
+    $('msg').textContent = '시작을 누르세요';
+  }
+  updateInfo();
   last = now(); frame();
 })();
 </script>
-<script src="sound.js?v=26"></script>
 <script>SFX.attachBgm();</script>
 </body>
 </html>
