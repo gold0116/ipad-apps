@@ -7,10 +7,10 @@
 <title>스네이크</title>
 <link rel="stylesheet" href="style.css?v=16">
 <style>
-  body { -webkit-user-select: none; user-select: none; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #info { text-align: center; font-size: 20px; margin: 4px 0 8px; }
-  canvas { display: block; margin: 0 auto; background: #1d2330; border-radius: 8px; }
-  .pad { text-align: center; margin-top: 10px; }
+  canvas { display: block; margin: 0 auto; background: #1d2330; border-radius: 8px; touch-action: none; }
+  .pad { text-align: center; margin-top: 10px; opacity: .55; }
   .pad .btn { width: 76px; font-size: 26px; padding: 10px 0; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; color: #e5484d; height: 28px; margin-top: 6px; }
 </style>
@@ -21,12 +21,12 @@
   <div id="info">점수 <b id="sc">0</b> · 최고 <b id="best">0</b></div>
   <canvas id="cv" width="300" height="300"></canvas>
   <div id="msg"></div>
+  <p style="text-align:center;color:#888;margin:6px 0 2px">캔버스를 <b>스와이프</b>해서 방향을 바꿔요</p>
   <div class="pad">
     <div><button class="btn" id="u">▲</button></div>
     <div><button class="btn" id="l">◀</button><button class="btn gray" id="go">시작</button><button class="btn" id="r">▶</button></div>
     <div><button class="btn" id="d">▼</button></div>
   </div>
-  <p style="text-align:center;color:#888">화살표 버튼이나 스와이프로 방향 전환</p>
 </div>
 <script>
 (function () {
@@ -39,9 +39,11 @@
   window.addEventListener('resize', layout, false);
   window.addEventListener('orientationchange', layout, false);
   layout();
-  var snake, dir, nextDir, food, score, best = 0, timer = null, over;
+  var snake, dir, dirQueue, food, score, best = 0, timer = null, over;
+  var particles = [], popups = [], flashT = 0, shakeT = 0;
   try { best = parseInt(localStorage.getItem('bestSnake') || '0', 10) || 0; } catch (e) {}
   function $(i) { return document.getElementById(i); }
+
   function placeFood() {
     while (true) {
       var f = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) }, ok = true;
@@ -49,55 +51,144 @@
       if (ok) { food = f; return; }
     }
   }
+
+  // 먹이를 먹으면 그 자리에서 조각이 튀고, "+1" 글자가 떠오르고, 화면이 살짝 번쩍이고 흔들린다
+  function burst(gx, gy) {
+    var cx = gx * S + S / 2, cy = gy * S + S / 2, colors = ['#ffd166', '#7ee787', '#5ec9f0'];
+    for (var i = 0; i < 16; i++) {
+      var a = Math.random() * Math.PI * 2, sp = 1.2 + Math.random() * 3.2;
+      particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, r: 1.5 + Math.random() * 2, c: colors[i % colors.length] });
+    }
+    popups.push({ x: cx, y: cy, life: 1, text: '+' + 1 });
+    flashT = 1; shakeT = 1;
+  }
+
   function start() {
     if (timer) clearInterval(timer);
     snake = [{ x: 7, y: 7 }, { x: 6, y: 7 }, { x: 5, y: 7 }];
-    dir = { x: 1, y: 0 }; nextDir = dir; score = 0; over = false;
-    $('msg').textContent = ''; placeFood(); draw();
+    dir = { x: 1, y: 0 }; dirQueue = []; score = 0; over = false;
+    particles = []; popups = []; flashT = 0; shakeT = 0;
+    $('msg').textContent = ''; placeFood();
     timer = setInterval(tick, 140);
   }
-  function setDir(x, y) { if (x === -dir.x && y === -dir.y) return; nextDir = { x: x, y: y }; }
+
+  // 방향을 최대 2개까지 줄 세워 두어, 급하게 두 번 스와이프해도 입력이 씹히거나
+  // 몸통으로 바로 꺾이는 "억울한" 죽음을 줄인다
+  function setDir(x, y) {
+    var last = dirQueue.length ? dirQueue[dirQueue.length - 1] : dir;
+    if (x === last.x && y === last.y) return;
+    if (x === -last.x && y === -last.y) return;
+    if (dirQueue.length >= 2) return;
+    dirQueue.push({ x: x, y: y });
+  }
+
   function tick() {
-    dir = nextDir;
+    if (dirQueue.length) dir = dirQueue.shift();
     var h = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
     if (h.x < 0 || h.y < 0 || h.x >= N || h.y >= N) return end();
     for (var i = 0; i < snake.length; i++) if (snake[i].x === h.x && snake[i].y === h.y) return end();
     snake.unshift(h);
-    if (h.x === food.x && h.y === food.y) { score++; placeFood(); } else snake.pop();
-    draw();
+    if (h.x === food.x && h.y === food.y) { score++; SFX.play('coin'); burst(food.x, food.y); placeFood(); } else snake.pop();
   }
+
   function end() {
     over = true; clearInterval(timer); timer = null;
     if (score > best) { best = score; try { localStorage.setItem('bestSnake', best); } catch (e) {} }
-    $('msg').textContent = '게임 오버!'; draw();
+    $('msg').textContent = '게임 오버!';
+    SFX.play('hit');
   }
+
+  function step(p) {
+    p.x += p.vx; p.y += p.vy; p.vx *= 0.93; p.vy *= 0.93; p.life -= 0.035;
+  }
+
   function draw() {
-    ctx.fillStyle = '#1d2330'; ctx.fillRect(0, 0, 300, 300);
-    ctx.fillStyle = '#e5484d'; ctx.fillRect(food.x * S + 2, food.y * S + 2, S - 4, S - 4);
+    ctx.save();
+    if (shakeT > 0) {
+      var m = shakeT * 3;
+      ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
+      shakeT = Math.max(0, shakeT - 0.12);
+    }
+    ctx.fillStyle = '#1d2330'; ctx.fillRect(-6, -6, 312, 312);
+
+    // 먹이는 살짝 숨쉬듯 커졌다 작아진다
+    var pulse = 1 + Math.sin(Date.now() / 160) * 0.12;
+    ctx.save();
+    ctx.translate(food.x * S + S / 2, food.y * S + S / 2);
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#e5484d';
+    ctx.fillRect(-(S - 4) / 2, -(S - 4) / 2, S - 4, S - 4);
+    ctx.restore();
+
     for (var i = 0; i < snake.length; i++) {
       ctx.fillStyle = i === 0 ? '#7ee787' : '#3fb950';
       ctx.fillRect(snake[i].x * S + 1, snake[i].y * S + 1, S - 2, S - 2);
     }
+
+    for (var j = 0; j < particles.length; j++) {
+      var p = particles[j];
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    for (var k = 0; k < popups.length; k++) {
+      var u = popups[k];
+      ctx.globalAlpha = Math.max(0, u.life);
+      ctx.fillStyle = '#ffd166';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(u.text, u.x, u.y - (1 - u.life) * 22);
+    }
+    ctx.globalAlpha = 1;
+
+    if (flashT > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (flashT * 0.22) + ')';
+      ctx.fillRect(0, 0, 300, 300);
+      flashT = Math.max(0, flashT - 0.08);
+    }
+    ctx.restore();
     $('sc').textContent = score; $('best').textContent = best;
   }
+
+  function render() {
+    for (var i = particles.length - 1; i >= 0; i--) { step(particles[i]); if (particles[i].life <= 0) particles.splice(i, 1); }
+    for (var j = popups.length - 1; j >= 0; j--) { popups[j].life -= 0.025; if (popups[j].life <= 0) popups.splice(j, 1); }
+    draw();
+    window.requestAnimationFrame(render);
+  }
+
   $('u').onclick = function () { setDir(0, -1); };
   $('d').onclick = function () { setDir(0, 1); };
   $('l').onclick = function () { setDir(-1, 0); };
   $('r').onclick = function () { setDir(1, 0); };
   $('go').onclick = start;
-  var sx, sy;
-  document.addEventListener('touchstart', function (e) { var t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, false);
-  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT') e.preventDefault(); }, false);
-  document.addEventListener('touchend', function (e) {
-    var t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0); else setDir(0, dy > 0 ? 1 : -1);
+
+  // 캔버스 스와이프: touchend까지 기다리지 않고, 손가락이 일정 거리만 움직이면
+  // 바로 방향을 바꾼다. 손을 떼지 않고 길게 밀면 방향을 여러 번 이어서 바꿀 수 있다.
+  var tx, ty, tracking = false, TH = 16;
+  cv.addEventListener('touchstart', function (e) {
+    var t = e.touches[0]; tx = t.clientX; ty = t.clientY; tracking = true;
   }, false);
+  cv.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    if (!tracking) return;
+    var t = e.touches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < TH) return;
+    if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0); else setDir(0, dy > 0 ? 1 : -1);
+    tx = t.clientX; ty = t.clientY;
+  }, false);
+  cv.addEventListener('touchend', function () { tracking = false; }, false);
+  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT') e.preventDefault(); }, false);
+
   document.addEventListener('keydown', function (e) {
     var m = { 37: [-1, 0], 38: [0, -1], 39: [1, 0], 40: [0, 1] }[e.keyCode];
     if (m) { e.preventDefault(); setDir(m[0], m[1]); }
   }, false);
-  snake = [{ x: 7, y: 7 }]; dir = nextDir = { x: 1, y: 0 }; score = 0; placeFood(); draw();
+
+  snake = [{ x: 7, y: 7 }]; dir = { x: 1, y: 0 }; dirQueue = []; score = 0; placeFood();
+  window.requestAnimationFrame(render);
 })();
 </script>
 <script src="sound.js?v=25"></script>
