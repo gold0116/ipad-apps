@@ -23,6 +23,7 @@
   <div id="msg"></div>
   <div class="pad">
     <button class="btn" id="cont">이어하기 (목숨 1)</button>
+    <span style="font-size:14px;color:#666">레벨 <select id="lvSel"></select></span>
     <button class="btn gray" id="go">새 게임</button>
   </div>
   <p style="text-align:center;color:#888">좌우로 문질러 받침대 이동 · 터치하면 발사 / 레이저 발사 / 붙은 공 놓기</p>
@@ -33,6 +34,18 @@
 (function () {
   var W = 300, H = 400, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
   var tfx = TouchFX.attach(cv);
+  // 디버그용: "터치 효과" 체크박스 옆에 "Auto" 체크박스를 하나 더 붙여서,
+  // 켜면 공 받기/아이템 캐치/레이저 발사를 자동으로 해 준다(stepAuto 참고).
+  var autoPlay = false;
+  (function () {
+    var bar = document.getElementById('touchfxbar');
+    if (!bar) return;
+    var lab = document.createElement('label'); lab.style.marginLeft = '14px';
+    var cb = document.createElement('input'); cb.type = 'checkbox';
+    cb.onchange = function () { autoPlay = cb.checked; };
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(' Auto'));
+    bar.appendChild(lab);
+  })();
   // 시각 효과(파티클/흔들림/플래시)는 vfx.js(별도 오버레이 캔버스 + 자체 rAF 루프)를
   // 쓰지 않고, 이 게임 자신의 캔버스/루프 안에서 직접 그린다. 계속 돌아가는 자신의
   // requestAnimationFrame 루프가 있는 상태에서 vfx.js를 같이 쓰면(오버레이가 또 다른
@@ -80,6 +93,7 @@
     ['12345432', '.222222.', '..3333..', '...22...', '....1...'],
     ['S.S.S.S.', '.2.2.2.2', 'S.S.S.S.', '.2.2.2.2', 'S.S.S.S.']
   ];
+  var LEVEL_NAMES = ['기본', '체크무늬', '다이아몬드', '강철벽', '폭발 벽돌', '강철 상자', '피라미드', '강철 기둥'];
 
   var ITEM_TYPES = ['expand', 'multi', 'laser', 'catch', 'slow', 'through', 'life', 'score2'];
   var ITEM_WEIGHT = { expand: 14, multi: 12, laser: 8, catch: 10, slow: 14, through: 6, life: 5, score2: 12 };
@@ -277,7 +291,8 @@
   function newGame() {
     try { localStorage.removeItem(SK); } catch (e) {}
     $('cont').style.display = 'none';
-    score = 0; lives = 3; stage = 1; levelIdx = 0; px = W / 2;
+    var selIdx = parseInt($('lvSel').value, 10); if (isNaN(selIdx)) selIdx = 0;
+    score = 0; lives = 3; stage = selIdx + 1; levelIdx = selIdx; px = W / 2;
     effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 }; pw = BASE_PW;
     items = []; bolts = [];
     buildBricks(levelIdx); resetBall(); $('msg').textContent = '터치하면 공 발사';
@@ -442,10 +457,31 @@
     tfx.draw(ctx);
   }
   function now() { return Date.now(); }
+  // 디버그용 자동 플레이: 공 받기(떨어지는 아이템 우선 추적, 없으면 가장 낮은 공을
+  // 따라감), 공이 준비 상태면 자동 발사, 붙잡힌 공은 자동으로 놓고, 레이저가
+  // 있으면 쿨다운에 맞춰 자동으로 쏜다(press()가 이 세 가지를 이미 다 처리함).
+  function stepAuto() {
+    if (!autoPlay) return;
+    press();
+    if (state !== 'play') return;
+    var targetX = px, bestDist = Infinity, i;
+    for (i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it.y < py) { var d = py - it.y; if (d < bestDist) { bestDist = d; targetX = it.x; } }
+    }
+    if (bestDist === Infinity || bestDist > 220) {
+      var best = null, bestY = -Infinity;
+      for (i = 0; i < balls.length; i++) { var b = balls[i]; if (b.y > bestY) { bestY = b.y; best = b; } }
+      if (best) targetX = best.x;
+    }
+    var step2 = 7;
+    if (targetX > px + step2) px += step2; else if (targetX < px - step2) px -= step2; else px = targetX;
+    if (px < pw / 2) px = pw / 2; if (px > W - pw / 2) px = W - pw / 2;
+  }
   function loop() {
     var t = now(), dt = t - last; last = t;
     if (dt > 40) dt = 40; if (dt < 0) dt = 0;
-    step(dt); stepFx(); draw();
+    stepAuto(); step(dt); stepFx(); draw();
     frame();
   }
   function frame() {
@@ -490,6 +526,13 @@
     $('msg').textContent = '이어하기! 터치하면 발사';
     updateInfo(); saveGame();
   };
+
+  (function () {
+    var sel = $('lvSel'), i, o;
+    for (i = 0; i < LEVELS.length; i++) {
+      o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + '. ' + (LEVEL_NAMES[i] || ''); sel.appendChild(o);
+    }
+  })();
 
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem(SK) || 'null'); } catch (e) {}
