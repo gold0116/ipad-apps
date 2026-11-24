@@ -1,0 +1,69 @@
+# CLAUDE.md — 개발 시 꼭 지킬 것
+
+이 저장소는 **iPad 2 (iOS 9.3.5, Safari 9)** 에서 그대로 돌아가야 하는 웹앱/게임
+모음입니다. 자세한 배경은 `README.md`를 먼저 읽으세요. 여기는 iPad 2 실기에서
+실제로 겪은 버그에서 나온, 어기면 안 되는 규칙만 적습니다.
+
+## 치명적인 규칙 (오늘 실기에서 직접 겪은 버그들)
+
+1. **ES5만 쓴다.** `let`/`const`/화살표 함수/템플릿 리터럴/클래스 금지. `var`와
+   함수 표현식으로 통일된 기존 코드 스타일을 그대로 따를 것.
+
+2. **CSS `@keyframes`/`animation`/`transform`은 항상 `-webkit-` 버전을 같이 쓴다.**
+   iOS 9 Safari는 unprefixed 버전만으로는 불안정할 수 있음. `mines.html`/
+   `memory.html`/`mole.html`/`vfx.js`의 keyframe 정의가 실제 예시.
+
+3. **기존에 보이던 내용 위에 새 캔버스를 겹치거나, 그 부모에 뒤늦게
+   `position:relative`를 주지 않는다.** 특히 `emoji.js`가 `-webkit-transform:scale()`로
+   그리는 이모지가 있는 컨테이너에 이렇게 하면, 구형 WebKit에서 이모지가
+   엉뚱한 위치(오른쪽 아래)로 튀거나 캔버스 내용이 아예 안 보이는 렌더링 버그가
+   실기에서 재현됨. (`touchfx.js`/`vfx.js`를 오늘 이 문제 때문에 다시 설계함 — 아래 참고.)
+
+4. **자기만의 `requestAnimationFrame` 루프가 있는 캔버스 게임(스네이크,
+   테트리스, 벽돌깨기처럼 계속 애니메이션하는 게임)에는 `vfx.js`를 쓰지 않는다.**
+   `vfx.js`는 `document.body`에 `position:fixed` 오버레이를 올리고 **자기만의 rAF
+   루프를 따로** 돌리는데, 호스트 게임도 rAF 루프를 돌리면(두 루프가 동시에 돎)
+   캔버스 내부 픽셀/DOM 상태는 멀쩡한데 화면에 보이는 결과만 멈춰버리는 버그를
+   Chromium에서 직접 재현·확인함. 대신 그 게임 자신의 `draw()`/루프 안에서 파티클/
+   흔들림/플래시를 직접 그릴 것 (`breakout.html`의 `burst()`/`stepFx()`가 그 예시,
+   `snake.html`이 원조 패턴).
+   - `touchfx.js`는 안전함: 별도 캔버스나 별도 rAF 루프 없이, 호스트가 자기 루프
+     끝에서 `tfx.draw(ctx)`를 호출해서 **같은** 캔버스에 직접 그리는 방식이라 이
+     문제가 없음.
+   - `vfx.js`는 지뢰찾기/짝맞추기/두더지 잡기처럼 **사용자 입력이 있을 때만
+     다시 그리는(자기 rAF 루프가 없는) DOM 기반 게임에만** 쓸 것.
+
+5. **파일을 하나라도 고치면 `app.appcache`의 버전 주석(`# v숫자 날짜`)을 반드시
+   올린다.** 안 올리면 앱 캐시가 업데이트를 무시하고 예전 버전을 계속 쓸 수 있음
+   (고전적인 appcache 함정: 매니페스트에 나열된 리소스 중 하나라도 못 받으면
+   전체 업데이트가 조용히 실패하고 전부 예전 걸 씀). 새 파일을 추가했으면 그 파일도
+   매니페스트 목록에 추가. 공용 JS(`sound.js`/`touchfx.js`/`vfx.js`)를 고쳤으면
+   그 파일을 쓰는 **모든** html의 `<script src="...?v=N">` 쿼리도 같이 올릴 것
+   (`grep -rl "sound.js?v=25"` 식으로 한 번에 치환).
+
+6. **공용 모듈은 셋**: `sound.js`(효과음 — `SFX.play('이름')`, 새 효과음 추가 시
+   `dtone`/`echo` 헬퍼로 풍부하게 만들 수 있음), `touchfx.js`(터치 물결/궤적 —
+   `TouchFX.attach(cv)` 후 자기 루프에서 `tfx.draw(ctx)` 호출, "터치 효과"
+   체크박스를 자동으로 붙여줌), `vfx.js`(파티클/흔들림/플래시 — 규칙 4 참고,
+   이벤트 기반 DOM 게임 전용).
+
+## 새 게임을 추가할 때
+
+- `index.html`의 타일 그리드에 한 줄 추가: `<div class="tile"><a href="x.html"><span class="ic" data-emo="72">이모지</span>이름<small>한줄설명</small></a></div>`
+- `app.appcache`의 파일 목록에 추가.
+- 터치/스와이프 제스처는 `snake.html`/`tetris.html`의 패턴(임계값 넘으면 즉시
+  반응, 버튼은 보조 수단으로 유지)을 참고.
+- 새 효과음이 필요하면 `sound.js`의 `FX` 객체에 추가(게임별로 따로 만들지 말 것).
+
+## 테스트 방법 (실기가 없을 때)
+
+- Playwright로 `file:///.../x.html` 열어서 확인. **터치 이벤트를 흉내낼 때는
+  반드시 `newPage({ hasTouch: true })`로 컨텍스트를 만들 것** — 이게 없으면
+  CDP `Input.dispatchTouchEvent`가 조용히 씹혀서(아무 반응 없이) 멀쩡한 코드를
+  버그로 오인하게 됨.
+- 화면이 이상해 보이면 스크린샷만 믿지 말고 `ctx.getImageData(...)`로 캔버스
+  실제 픽셀과 `getBoundingClientRect()`로 DOM 레이아웃을 직접 찍어서 비교할 것 —
+  "스크린샷엔 안 보이는데 실제 데이터는 멀쩡함"이면 화면 합성(compositing) 버그
+  (규칙 3·4 같은 것)를 의심.
+- 어디까지나 Chromium 시뮬레이션이다. **최종 확인은 항상 iPad 2 실기**에서
+  사용자가 직접 해야 함 — 커밋 메시지/README에 "실기 확인 전"인지 항상 명시할 것.
