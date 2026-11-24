@@ -41,6 +41,11 @@
     <div id="resultBox" style="display:none"></div>
     <div id="info">도착 <b id="arrived">0</b> / <b id="total">0</b> · <span id="stageLabel"></span></div>
     <canvas id="cv" width="364" height="480"></canvas>
+    <div class="pad" style="margin-top:4px">
+      <button class="btn gray" id="zoomOut" style="padding:8px 18px;font-size:18px">－</button>
+      <span style="font-size:13px;color:#888">화면 확대/축소</span>
+      <button class="btn gray" id="zoomIn" style="padding:8px 18px;font-size:18px">＋</button>
+    </div>
     <div class="pad">
       <button class="btn" id="again" style="display:none">다시 추첨</button>
       <button class="btn gray" id="edit">이름 다시 입력</button>
@@ -93,7 +98,20 @@
   var CUR = STAGES[0]; // 레이스 시작 시 선택된 스테이지로 다시 설정됨
 
   var CW = 364, CH = 480, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-  var PPU = 14; // 픽셀/단위(원본 좌표 단위 그대로 쓰고 그릴 때만 변환)
+  var PPU_MIN = 7, PPU_MAX = 20;
+  // 픽셀/단위(원본 좌표 단위 그대로 쓰고 그릴 때만 변환). "Pot of greed"에서
+  // 카메라가 리드 공(leadY = 아직 못 들어온 공 중 가장 밑까지 간 공) 기준으로
+  // 따라가는데, 그 공이 항아리 바닥 쪽에 머물러 있으면 다른 공이 날개를 타고
+  // 올라가도(y가 줄어드는 방향) 화면 위쪽이 가려서 안 보이는 문제가 있었음 —
+  // 카메라 추적 로직을 억지로 고치는 대신, 사용자가 직접 줌아웃해서 더 넓은
+  // 범위를 볼 수 있게 +/- 버튼을 추가함(화면 확대율만 바뀌고 물리에는 전혀
+  // 영향 없음).
+  var PPU = 14;
+  try { var savedPPU = parseFloat(localStorage.getItem('balldrawZoom')); if (savedPPU >= PPU_MIN && savedPPU <= PPU_MAX) PPU = savedPPU; } catch (e) {}
+  function setZoom(v) {
+    PPU = Math.max(PPU_MIN, Math.min(PPU_MAX, v));
+    try { localStorage.setItem('balldrawZoom', String(PPU)); } catch (e) {}
+  }
   var tfx = TouchFX.attach(cv);
   function $(id) { return document.getElementById(id); }
   function now() { return Date.now(); }
@@ -548,6 +566,8 @@
     state = 'setup';
     $('race').style.display = 'none'; $('setup').style.display = '';
   };
+  $('zoomOut').onclick = function () { setZoom(PPU / 1.15); };
+  $('zoomIn').onclick = function () { setZoom(PPU * 1.15); };
 })();
 </script>
 <script>SFX.attachBgm();</script>
