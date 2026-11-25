@@ -113,6 +113,22 @@
     'sudoku.html': ['tetris'],
     'tetris.html': ['drop', 'move', 'over', 'rotate', 'start']
   };
+  // 사용자가 가장 관심 있어하는 세 가지(시작/죽음/승리)를 게임마다 실제로 어느
+  // 효과음 이름이 담당하는지 — 죽음 소리는 게임마다 다른 이름을 씀(snake/dino는
+  // 'hit', mines는 'boom', 나머지는 'over'). 승리(끝날 때) 소리가 있는 건 스테이지/
+  // 레벨이 있는 세 게임(벽돌깨기·지뢰찾기·버블 슈터)뿐 — 나머지는 승리 개념
+  // 자체가 없는 엔드리스 게임이라 win이 없음.
+  var GAME_LIFECYCLE = {
+    'snake.html': { start: 'start', death: 'hit' },
+    'dino.html': { start: 'start', death: 'hit' },
+    'balloon.html': { start: 'start', death: 'over' },
+    'breakout.html': { start: 'start', death: 'over', win: 'win' },
+    'mines.html': { start: 'start', death: 'boom', win: 'win' },
+    'tetris.html': { start: 'start', death: 'over' },
+    '2048.html': { start: 'start', death: 'over' },
+    'bubble.html': { start: 'start', death: 'over', win: 'win' }
+  };
+  var LIFECYCLE_LABELS = { start: '시작 멜로디', death: '죽을 때 멜로디', win: '끝날 때(승리) 멜로디' };
   var GAME_LABELS = {
     '2048.html': '2048', 'balldraw.html': '구슬 추첨', 'balloon.html': '풍선 모험', 'breakout.html': '벽돌깨기',
     'bubble.html': '버블 슈터', 'chess.html': '체스', 'dino.html': '공룡 달리기', 'gomoku.html': '오목',
@@ -283,27 +299,49 @@
     for (var i = 0; i < pages.length; i++) { o = document.createElement('option'); o.value = pages[i]; o.textContent = GAME_LABELS[pages[i]] || pages[i]; sel.appendChild(o); }
     sel.onchange = renderGameFxMap;
   })();
+  function makePageFxRow(page, name, label) {
+    var row = document.createElement('div'); row.className = 'frow';
+    var lab = document.createElement('span'); lab.textContent = label;
+    var sel = document.createElement('select');
+    var optDefault = document.createElement('option'); optDefault.value = ''; optDefault.textContent = '전체 게임 설정 따름'; sel.appendChild(optDefault);
+    for (var k = 0; k < list.length; k++) { var o = document.createElement('option'); o.value = list[k].id; o.textContent = list[k].name; sel.appendChild(o); }
+    var pageMap = loadFxMapPages()[page] || {};
+    sel.value = pageMap[name] || '';
+    sel.onchange = function () {
+      var m = loadFxMapPages();
+      if (!m[page]) m[page] = {};
+      if (sel.value) m[page][name] = sel.value; else delete m[page][name];
+      var empty = true; for (var kk in m[page]) if (m[page].hasOwnProperty(kk)) empty = false;
+      if (empty) delete m[page];
+      saveFxMapPages(m);
+    };
+    row.appendChild(lab); row.appendChild(sel);
+    return row;
+  }
+  // 시작/죽음/승리(끝날 때)를 "핵심 효과음"으로 맨 위에 먼저 보여주고(사용자가
+  // 가장 관심 있어하는 세 가지), 그 게임이 쓰는 나머지 자잘한 효과음은 아래에.
   function renderGameFxMap() {
-    var box = $('gameFxMap'), page = $('gameSel').value, names = (GAME_FX[page] || []).slice().sort();
-    var map = loadFxMapPages(), pageMap = map[page] || {};
+    var box = $('gameFxMap'), page = $('gameSel').value;
+    var lc = GAME_LIFECYCLE[page], names = (GAME_FX[page] || []).slice().sort(), used = {}, i;
     box.innerHTML = '';
-    for (var i = 0; i < names.length; i++) (function (name) {
-      var row = document.createElement('div'); row.className = 'frow';
-      var lab = document.createElement('span'); lab.textContent = FX_LABELS[name] || name;
-      var sel = document.createElement('select');
-      var optDefault = document.createElement('option'); optDefault.value = ''; optDefault.textContent = '전체 게임 설정 따름'; sel.appendChild(optDefault);
-      for (var k = 0; k < list.length; k++) { var o = document.createElement('option'); o.value = list[k].id; o.textContent = list[k].name; sel.appendChild(o); }
-      sel.value = pageMap[name] || '';
-      sel.onchange = function () {
-        var m = loadFxMapPages();
-        if (!m[page]) m[page] = {};
-        if (sel.value) m[page][name] = sel.value; else delete m[page][name];
-        var empty = true; for (var kk in m[page]) if (m[page].hasOwnProperty(kk)) empty = false;
-        if (empty) delete m[page];
-        saveFxMapPages(m);
-      };
-      row.appendChild(lab); row.appendChild(sel); box.appendChild(row);
-    })(names[i]);
+    if (lc) {
+      var core = document.createElement('div');
+      core.style.cssText = 'background:#eef3ff;border-radius:10px;padding:6px 10px;margin-bottom:8px';
+      var ttl = document.createElement('div');
+      ttl.style.cssText = 'font-weight:bold;font-size:13px;color:#2f6fed;margin:4px 0'; ttl.textContent = '핵심 효과음';
+      core.appendChild(ttl);
+      core.appendChild(makePageFxRow(page, lc.start, LIFECYCLE_LABELS.start)); used[lc.start] = true;
+      core.appendChild(makePageFxRow(page, lc.death, LIFECYCLE_LABELS.death)); used[lc.death] = true;
+      if (lc.win) { core.appendChild(makePageFxRow(page, lc.win, LIFECYCLE_LABELS.win)); used[lc.win] = true; }
+      box.appendChild(core);
+    }
+    var restTtl = document.createElement('div');
+    restTtl.style.cssText = 'font-size:13px;color:#999;margin:4px 0'; restTtl.textContent = lc ? '그 외 효과음' : '효과음';
+    box.appendChild(restTtl);
+    for (i = 0; i < names.length; i++) {
+      if (used[names[i]]) continue;
+      box.appendChild(makePageFxRow(page, names[i], FX_LABELS[names[i]] || names[i]));
+    }
   }
 
   buildPiano(); load(); render();
