@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>피아노</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  h2 { font-size: 18px; margin: 20px 0 8px; border-left: 5px solid #2f6fed; padding-left: 8px; }
+  .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+  .row { margin: 6px 0; font-size: 15px; }
+  .row label { margin-right: 10px; }
+  select { font-size: 15px; padding: 5px; }
+  input[type=text] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; -webkit-box-sizing: border-box; box-sizing: border-box; }
+  #octWrap { display: inline-block; }
+  #octWrap button { font-size: 16px; padding: 4px 12px; border: 0; border-radius: 8px; background: #8a8f98; color: #fff; }
+  #piano { position: relative; height: 170px; margin: 10px 0; touch-action: none; }
+  #piano .wrow { display: -webkit-flex; display: flex; height: 100%; }
+  #piano .wkey { -webkit-flex: 1; flex: 1; background: #fff; border: 1px solid #c7ccd4; border-left-width: 0; border-radius: 0 0 6px 6px; position: relative; }
+  #piano .wrow .wkey:first-child { border-left-width: 1px; }
+  #piano .wkey .lbl { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 12px; color: #999; }
+  #piano .wkey.active { background: #dbe6ff; }
+  #piano .bkeys { position: absolute; top: 0; left: 0; width: 100%; height: 60%; }
+  #piano .bkey { position: absolute; top: 0; width: 9%; height: 100%; background: #2b2f36; border-radius: 0 0 4px 4px; }
+  #piano .bkey.active { background: #2f6fed; }
+  #recBtn { font-size: 17px; padding: 12px 20px; border: 0; border-radius: 12px; background: #2f6fed; color: #fff; }
+  #recBtn.on { background: #e5484d; }
+  #recStatus { font-size: 14px; color: #888; margin-left: 10px; }
+  #list { list-style: none; margin: 0; padding: 0; }
+  #list li { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+  #list .nm { font-size: 17px; font-weight: bold; }
+  #list .sub { font-size: 13px; opacity: .75; margin: 2px 0 8px; }
+  #list .btn { padding: 8px 16px; font-size: 15px; margin: 2px 4px 2px 0; }
+  #fxMap .frow { display: -webkit-flex; display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 15px; }
+  #fxMap .frow select { max-width: 55%; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 피아노</div>
+<div class="wrap">
+  <p style="color:#666;font-size:14px;line-height:1.5">건반을 눌러 연주하고, "녹음 시작"으로 멜로디를 저장하세요. 저장한 멜로디는 아래 "효과음 교체"에서 다른 게임의 효과음으로 쓸 수 있어요.</p>
+
+  <div class="card">
+    <div class="row">
+      악기 <select id="instr"></select>
+      <span id="octWrap">옥타브 <button id="octDown">－</button> <b id="octLabel">4</b> <button id="octUp">＋</button></span>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="doubling"> 더블링</label>
+      <label><input type="checkbox" id="echoCk"> 에코</label>
+    </div>
+  </div>
+
+  <div id="piano">
+    <div class="wrow" id="wrow"></div>
+    <div class="bkeys" id="bkeys"></div>
+  </div>
+
+  <div class="card">
+    <button id="recBtn">● 녹음 시작</button>
+    <span id="recStatus"></span>
+  </div>
+
+  <div class="card" id="saveCard" style="display:none">
+    <p style="margin:0 0 4px;font-size:14px">멜로디 이름</p>
+    <input type="text" id="nm" placeholder="예: 시작 효과음용 멜로디">
+    <div style="margin-top:8px">
+      <button class="btn" id="saveBtn">저장</button>
+      <button class="btn gray" id="discardBtn">버리기</button>
+    </div>
+  </div>
+
+  <h2>저장된 멜로디</h2>
+  <ul id="list"></ul>
+  <p id="empty" style="color:#888;font-size:15px;display:none">저장된 멜로디가 없어요. 위에서 녹음해보세요.</p>
+
+  <h2>효과음 교체</h2>
+  <p style="color:#666;font-size:14px;line-height:1.5">게임에서 나는 효과음을 저장한 멜로디로 바꿀 수 있어요(모든 게임에 공통 적용). "기본 소리"로 두면 원래 효과음 그대로예요.</p>
+  <div class="card" id="fxMap"></div>
+
+  <p style="font-size:13px;color:#888;margin-top:16px">멜로디는 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요).</p>
+</div>
+<script src="sound.js?v=31"></script>
+<script>
+(function () {
+  var LIST_KEY = 'piano-list-v1', FXMAP_KEY = 'customFxMap-v1';
+  var FX_LABELS = {
+    start: '시작', shoot: '발사(버블슈터)', jump: '점프(공룡)', coin: '동전/매치', item: '아이템 획득',
+    hit: '피격/충돌', point: '점수', move: '이동', clack: '돌 놓기(오목·장기)', clackcap: '돌 잡기(오목·장기)',
+    rotate: '회전', drop: '낙하/놓기', line: '줄 삭제', tetris: '테트리스(4줄)', over: '게임 오버',
+    reveal: '칸 열기(지뢰찾기)', flag: '깃발 꽂기', unflag: '깃발 떼기', boom: '폭발(지뢰)', win: '승리',
+    match: '짝 맞춤', mismatch: '짝 실패', flip: '카드 뒤집기', pop: '뽕(두더지·버블)', bonk: '맞춤(두더지)', tick: '똑딱'
+  };
+  function $(i) { return document.getElementById(i); }
+  function now() { return Date.now(); }
+
+  var list = [], instrument = 'piano', doubling = false, echoOn = false, octave = 4;
+  var recording = false, recStartAt = 0, recNotes = [], recTimer = null, pendingMelody = null;
+  var activeNotes = {};
+
+  function load() { try { list = JSON.parse(localStorage.getItem(LIST_KEY) || '[]'); } catch (e) { list = []; } }
+  function store() { try { localStorage.setItem(LIST_KEY, JSON.stringify(list)); return true; } catch (e) { alert('저장 공간이 부족하거나 저장할 수 없어요'); return false; } }
+  function fmt(sec) { sec = Math.round(sec * 10) / 10; return sec + '초'; }
+
+  // ---- 건반 ----
+  var WHITES = [{ n: 'C', o: 0 }, { n: 'D', o: 2 }, { n: 'E', o: 4 }, { n: 'F', o: 5 }, { n: 'G', o: 7 }, { n: 'A', o: 9 }, { n: 'B', o: 11 }];
+  var BLACKS = [{ n: 'C#', o: 1, after: 0 }, { n: 'D#', o: 3, after: 1 }, { n: 'F#', o: 6, after: 3 }, { n: 'G#', o: 8, after: 4 }, { n: 'A#', o: 10, after: 5 }];
+  function octaveBase() { return 12 * (octave + 1); }
+  function buildPiano() {
+    var wrow = $('wrow'), bkeys = $('bkeys'), i, w, b, el, left;
+    wrow.innerHTML = ''; bkeys.innerHTML = '';
+    for (i = 0; i < WHITES.length; i++) {
+      w = WHITES[i];
+      el = document.createElement('div'); el.className = 'wkey';
+      el.innerHTML = '<span class="lbl">' + w.n + '</span>';
+      bindKey(el, w.o);
+      wrow.appendChild(el);
+    }
+    for (i = 0; i < BLACKS.length; i++) {
+      b = BLACKS[i];
+      el = document.createElement('div'); el.className = 'bkey';
+      left = (b.after + 1) * (100 / 7) - 4.5;
+      el.style.left = left + '%';
+      bindKey(el, b.o);
+      bkeys.appendChild(el);
+    }
+  }
+  function bindKey(el, offset) {
+    function on(e) { e.preventDefault(); el.className += ' active'; noteOn(octaveBase() + offset); }
+    function off(e) { e.preventDefault(); el.className = el.className.replace(/ active\b/, ''); noteOff(octaveBase() + offset); }
+    el.addEventListener('touchstart', on, false);
+    el.addEventListener('touchend', off, false);
+    el.addEventListener('touchcancel', off, false);
+    el.addEventListener('mousedown', on, false);
+    el.addEventListener('mouseup', off, false);
+    el.addEventListener('mouseleave', off, false);
+  }
+  document.addEventListener('touchmove', function (e) {
+    var p = $('piano');
+    if (p && p.contains(e.target)) e.preventDefault();
+  }, false);
+
+  function noteOn(midi) {
+    if (activeNotes[midi]) return;
+    var handle = SFX.liveNoteOn(midi, instrument, doubling, echoOn);
+    var startAt = recording ? (now() - recStartAt) / 1000 : 0;
+    activeNotes[midi] = { handle: handle, startAt: startAt };
+  }
+  function noteOff(midi) {
+    var a = activeNotes[midi];
+    if (!a) return;
+    a.handle.stop();
+    if (recording) {
+      var dur = Math.max(0.05, (now() - recStartAt) / 1000 - a.startAt);
+      recNotes.push({ t: a.startAt, midi: midi, dur: dur });
+    }
+    delete activeNotes[midi];
+  }
+
+  // ---- 녹음 ----
+  function startRecording() {
+    recording = true; recNotes = []; recStartAt = now();
+    $('recBtn').textContent = '■ 녹음 종료'; $('recBtn').className = 'on';
+    recTimer = setInterval(function () { $('recStatus').textContent = ((now() - recStartAt) / 1000).toFixed(1) + '초 녹음 중'; }, 100);
+  }
+  function stopRecording() {
+    recording = false; clearInterval(recTimer);
+    $('recBtn').textContent = '● 녹음 시작'; $('recBtn').className = ''; $('recStatus').textContent = '';
+    if (recNotes.length) {
+      pendingMelody = { instrument: instrument, doubling: doubling, echo: echoOn, notes: recNotes.slice() };
+      $('saveCard').style.display = ''; $('nm').value = ''; $('nm').focus();
+    }
+  }
+  $('recBtn').onclick = function () { if (recording) stopRecording(); else startRecording(); };
+  $('saveBtn').onclick = function () {
+    var name = $('nm').value.replace(/^\s+|\s+$/g, '') || '이름 없는 멜로디';
+    var obj = pendingMelody, last = obj.notes[obj.notes.length - 1], seconds = last ? last.t + last.dur : 0;
+    list.push({ id: 'p' + new Date().getTime(), name: name, count: obj.notes.length, seconds: seconds, text: JSON.stringify(obj) });
+    if (!store()) { list.pop(); return; }
+    pendingMelody = null; $('saveCard').style.display = 'none';
+    render();
+  };
+  $('discardBtn').onclick = function () { pendingMelody = null; $('saveCard').style.display = 'none'; };
+
+  // ---- 설정 ----
+  (function initInstr() {
+    var sel = $('instr'), ins = SFX.instruments(), i, o;
+    for (i = 0; i < ins.length; i++) { o = document.createElement('option'); o.value = ins[i].id; o.textContent = ins[i].label; sel.appendChild(o); }
+    sel.onchange = function () { instrument = sel.value; };
+  })();
+  $('doubling').onchange = function () { doubling = this.checked; };
+  $('echoCk').onchange = function () { echoOn = this.checked; };
+  $('octDown').onclick = function () { if (octave > 1) { octave--; $('octLabel').textContent = octave; } };
+  $('octUp').onclick = function () { if (octave < 7) { octave++; $('octLabel').textContent = octave; } };
+
+  // ---- 저장된 멜로디 목록 ----
+  function render() {
+    var ul = $('list'); ul.innerHTML = '';
+    $('empty').style.display = list.length ? 'none' : 'block';
+    for (var i = 0; i < list.length; i++) (function (s) {
+      var li = document.createElement('li');
+      var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = s.name;
+      var inst = (function () { try { return JSON.parse(s.text).instrument; } catch (e) { return ''; } })();
+      var instLabel = ''; var ins = SFX.instruments(); for (var k = 0; k < ins.length; k++) if (ins[k].id === inst) instLabel = ins[k].label;
+      var sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = '음 ' + s.count + '개 · ' + fmt(s.seconds) + (instLabel ? ' · ' + instLabel : '');
+      var bp = document.createElement('button'); bp.className = 'btn'; bp.textContent = '재생';
+      bp.onclick = function () { try { SFX.playMelody(JSON.parse(s.text)); } catch (e) {} };
+      var bd = document.createElement('button'); bd.className = 'btn gray'; bd.textContent = '삭제';
+      bd.onclick = function () {
+        if (!confirm('"' + s.name + '"을(를) 삭제할까요?')) return;
+        for (var k2 = 0; k2 < list.length; k2++) if (list[k2].id === s.id) { list.splice(k2, 1); break; }
+        store(); render(); renderFxMap();
+      };
+      li.appendChild(nm); li.appendChild(sub); li.appendChild(bp); li.appendChild(bd); ul.appendChild(li);
+    })(list[i]);
+    renderFxMap();
+  }
+
+  // ---- 효과음 교체 ----
+  function loadFxMap() { try { return JSON.parse(localStorage.getItem(FXMAP_KEY) || '{}'); } catch (e) { return {}; } }
+  function saveFxMap(map) { try { localStorage.setItem(FXMAP_KEY, JSON.stringify(map)); } catch (e) {} }
+  function renderFxMap() {
+    var box = $('fxMap'); box.innerHTML = '';
+    var names = SFX.fxNames().sort(), map = loadFxMap(), i, name;
+    for (i = 0; i < names.length; i++) (function (name) {
+      var row = document.createElement('div'); row.className = 'frow';
+      var lab = document.createElement('span'); lab.textContent = FX_LABELS[name] || name;
+      var sel = document.createElement('select');
+      var optDefault = document.createElement('option'); optDefault.value = ''; optDefault.textContent = '기본 소리'; sel.appendChild(optDefault);
+      for (var k = 0; k < list.length; k++) { var o = document.createElement('option'); o.value = list[k].id; o.textContent = list[k].name; sel.appendChild(o); }
+      sel.value = map[name] || '';
+      sel.onchange = function () {
+        var m = loadFxMap();
+        if (sel.value) m[name] = sel.value; else delete m[name];
+        saveFxMap(m);
+      };
+      row.appendChild(lab); row.appendChild(sel); box.appendChild(row);
+    })(names[i]);
+  }
+
+  buildPiano(); load(); render();
+})();
+</script>
+</body>
+</html>

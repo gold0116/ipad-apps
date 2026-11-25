@@ -192,6 +192,85 @@
     for (var i = 0; i < times; i++) tone(freq, dur, type, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap);
   }
 
+  // ---- piano.html(직접 친 멜로디 녹음) 지원: 악기(오실레이터 파형 프리셋),
+  // 누르고 있는 동안 우는 "라이브" 음, 녹음한 멜로디를 한 번만 재생하는 것 ----
+  var INSTRUMENTS = {
+    piano: { type: 'triangle', label: '피아노' },
+    organ: { type: 'square', label: '오르간' },
+    synth: { type: 'sawtooth', label: '신디' },
+    bell: { type: 'sine', label: '벨' },
+    bass: { type: 'sine', label: '베이스', octave: -1 }
+  };
+  function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  // 건반을 누르고 있는 동안 소리를 내는 오실레이터 하나(떼면 stop()으로 빨리 잦아들게 끊는다)
+  function liveVoice(freq, type, vol) {
+    if (muted || !ctx) return { stop: function () {} };
+    try {
+      var o = ctx.createOscillator(), g = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
+      o.type = type || 'square'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(vol || 0.14, ctx.currentTime + 0.012);
+      o.connect(g); g.connect(ctx.destination);
+      if (o.start) o.start(); else o.noteOn(0);
+      var stopped = false;
+      return {
+        stop: function () {
+          if (stopped || !ctx) return; stopped = true;
+          try {
+            var t = ctx.currentTime;
+            g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t);
+            g.gain.linearRampToValueAtTime(0.0001, t + 0.06);
+            if (o.stop) o.stop(t + 0.08); else setTimeout(function () { try { o.noteOff(0); } catch (e) {} }, 80);
+          } catch (e) {}
+        }
+      };
+    } catch (e) { return { stop: function () {} }; }
+  }
+  // 건반 하나를 누름 — 악기/더블링/에코 설정에 맞춰 1~2개 보이스를 울리고,
+  // 뗄 때 호출할 stop()을 돌려준다(에코가 켜져 있으면 뗄 때 짧은 꼬리를 남김)
+  function liveNoteOn(midi, instrumentId, doubling, echoOn) {
+    var inst = INSTRUMENTS[instrumentId] || INSTRUMENTS.piano;
+    var m = midi + (inst.octave || 0) * 12, freq = midiToFreq(m);
+    var voices = [liveVoice(freq, inst.type, 0.16)];
+    if (doubling) voices.push(liveVoice(freq * 1.012, inst.type, 0.1));
+    return {
+      stop: function () {
+        var i; for (i = 0; i < voices.length; i++) voices[i].stop();
+        if (echoOn) echo(freq, 0.18, inst.type, 0.08, 0, 3, 0.1, 0.5);
+      }
+    };
+  }
+  // 녹음된 멜로디 하나를 길이가 정해진 음표들로 한 번만 재생(미리듣기 / 효과음으로 쓸 때)
+  function playVoices(freq, dur, type, delay, doubling, echoOn) {
+    function one(f, v) { if (echoOn) echo(f, dur, type, v, delay, 3, 0.09, 0.55); else tone(f, dur, type, v, delay); }
+    if (doubling) { one(freq, 0.1); one(freq * 1.012, 0.08); } else one(freq, 0.13);
+  }
+  function playMelody(obj) {
+    if (muted || !ctx || !obj || !obj.notes) return;
+    var inst = INSTRUMENTS[obj.instrument] || INSTRUMENTS.piano, i, note, m, freq;
+    for (i = 0; i < obj.notes.length; i++) {
+      note = obj.notes[i]; m = note.midi + (inst.octave || 0) * 12; freq = midiToFreq(m);
+      playVoices(freq, note.dur, inst.type, note.t, obj.doubling, obj.echo);
+    }
+  }
+  // 저장된 멜로디(piano.html이 localStorage 'piano-list-v1'에 적어 둠)를 id로 찾는다
+  function findMelody(id) {
+    try {
+      var list = JSON.parse(localStorage.getItem('piano-list-v1') || '[]'), i;
+      for (i = 0; i < list.length; i++) if (list[i].id === id) return JSON.parse(list[i].text);
+    } catch (e) {}
+    return null;
+  }
+  // 효과음 이름(예: 'start')을 사용자가 녹음한 멜로디로 바꿔치기하는 매핑
+  // (piano.html의 "효과음 교체"에서 설정, localStorage 'customFxMap-v1')
+  function customFxFor(name) {
+    try {
+      var map = JSON.parse(localStorage.getItem('customFxMap-v1') || '{}');
+      if (map[name]) return findMelody(map[name]);
+    } catch (e) {}
+    return null;
+  }
+
   var FX = {
     // 게임 시작: 짧게 올라가는 3음 팡파레
     start:  function () { tone(440, 0.07, 'square', 0.09, 0); tone(660, 0.08, 'square', 0.09, 0.07); tone(880, 0.13, 'square', 0.1, 0.14); },
@@ -287,8 +366,24 @@
 
   window.SFX = {
     attachBgm: attachBgm,
-    play: function (name) { if (FX[name]) FX[name](); },
-    version: 30,
+    play: function (name) {
+      var custom = customFxFor(name);
+      if (custom) { playMelody(custom); return; }
+      if (FX[name]) FX[name]();
+    },
+    version: 31,
+    liveNoteOn: liveNoteOn,
+    playMelody: playMelody,
+    instruments: function () {
+      var out = [], k;
+      for (k in INSTRUMENTS) if (INSTRUMENTS.hasOwnProperty(k)) out.push({ id: k, label: INSTRUMENTS[k].label });
+      return out;
+    },
+    fxNames: function () {
+      var out = [], k;
+      for (k in FX) if (FX.hasOwnProperty(k)) out.push(k);
+      return out;
+    },
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -296,7 +391,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 30, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 31, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
