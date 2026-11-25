@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.2';
-window.APP_VERSION_NOTE = '피아노: 게임별 효과음 교체에서 "시작/죽을 때/승리" 핵심 세 가지를 맨 위에 먼저 보여주도록 정리';
+window.APP_VERSION = '0.4.3';
+window.APP_VERSION_NOTE = '피아노: 악기 소리를 배음 여러 개 합성+지수 감쇠 꼬리로 더 풍부하게(keithwhor/audiosynth 아이디어 참고)';
 window.APP_VERSION_DATE = '2026-11-25';

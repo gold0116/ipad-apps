@@ -192,57 +192,108 @@
     for (var i = 0; i < times; i++) tone(freq, dur, type, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap);
   }
 
-  // ---- piano.html(직접 친 멜로디 녹음) 지원: 악기(오실레이터 파형 프리셋),
-  // 누르고 있는 동안 우는 "라이브" 음, 녹음한 멜로디를 한 번만 재생하는 것 ----
+  // ---- piano.html(직접 친 멜로디 녹음) 지원: 악기(배음 합성 프리셋), 누르고
+  // 있는 동안 우는 "라이브" 음, 녹음한 멜로디를 한 번만 재생하는 것 ----
+  // 오실레이터 파형 하나만 쓰는 대신, 배음(정수 또는 정수에 가까운 배수)을
+  // 여러 개 겹쳐서(각자 상대 음량을 가진 sine) 소리를 입체적으로 만든다.
+  // 꼬리도 선형으로 깎지 않고 "음량 × (1-진행률)^dampen" 지수 곡선으로
+  // 감쇠시켜서, 오르간처럼 오래 지속되는 악기(dampenBase 작음)와 피아노/벨처럼
+  // 치면 바로 잦아드는 악기(dampenBase 큼)를 구분한다.
+  // (keithwhor/audiosynth, MIT 라이선스 — 배음 합성+지수 감쇠라는 아이디어만
+  // 참고해서 이 저장소의 실시간 오실레이터 구조에 맞게 새로 짬. 그쪽은 노트를
+  // 통째로 PCM(WAV)으로 미리 구워 재생하는 방식이라 건반을 누르고 있는 동안
+  // 우는(떼는 시점을 모르는) 우리 구조와는 안 맞아서 그 부분은 안 가져옴.)
   var INSTRUMENTS = {
-    piano: { type: 'triangle', label: '피아노' },
-    organ: { type: 'square', label: '오르간' },
-    synth: { type: 'sawtooth', label: '신디' },
-    bell: { type: 'sine', label: '벨' },
-    bass: { type: 'sine', label: '베이스', octave: -1 }
+    piano: { label: '피아노', harmonics: [[1, 1], [2, 0.55], [3, 0.2], [4, 0.08]], dampenBase: 2.2 },
+    organ: { label: '오르간', harmonics: [[1, 1], [2, 0.5], [4, 0.25]], dampenBase: 0.5 },
+    synth: { label: '신디', harmonics: [[1, 1], [2, 0.3], [3, 0.15]], dampenBase: 1.4 },
+    bell: { label: '벨', harmonics: [[1, 1], [2, 0.5], [3.01, 0.33], [4.2, 0.18]], dampenBase: 3.2 },
+    bass: { label: '베이스', harmonics: [[1, 1], [2, 0.25]], dampenBase: 1.6, octave: -1 }
   };
   function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-  // 건반을 누르고 있는 동안 소리를 내는 오실레이터 하나(떼면 stop()으로 빨리 잦아들게 끊는다)
-  function liveVoice(freq, type, vol) {
+  // 배음 여러 개를 한 그룹으로 묶어서 울린다(그룹 전체를 gain 하나로 떼기 쉽게)
+  function harmonicChord(freq, inst, vol) {
     if (muted || !ctx) return { stop: function () {} };
     try {
-      var o = ctx.createOscillator(), g = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
-      o.type = type || 'square'; o.frequency.value = freq;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(vol || 0.14, ctx.currentTime + 0.012);
-      o.connect(g); g.connect(ctx.destination);
-      if (o.start) o.start(); else o.noteOn(0);
+      var group = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
+      group.connect(ctx.destination);
+      group.gain.setValueAtTime(0.0001, ctx.currentTime);
+      group.gain.linearRampToValueAtTime(vol || 0.14, ctx.currentTime + 0.012);
+      var oscs = [], i, h, o, g;
+      for (i = 0; i < inst.harmonics.length; i++) {
+        h = inst.harmonics[i];
+        o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq * h[0];
+        g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
+        o.connect(g); g.connect(group);
+        if (o.start) o.start(); else o.noteOn(0);
+        oscs.push(o);
+      }
       var stopped = false;
       return {
         stop: function () {
           if (stopped || !ctx) return; stopped = true;
           try {
             var t = ctx.currentTime;
-            g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t);
-            g.gain.linearRampToValueAtTime(0.0001, t + 0.06);
-            if (o.stop) o.stop(t + 0.08); else setTimeout(function () { try { o.noteOff(0); } catch (e) {} }, 80);
+            group.gain.cancelScheduledValues(t); group.gain.setValueAtTime(group.gain.value, t);
+            group.gain.linearRampToValueAtTime(0.0001, t + 0.07);
+            for (var k = 0; k < oscs.length; k++) {
+              if (oscs[k].stop) oscs[k].stop(t + 0.09);
+              else (function (osc) { setTimeout(function () { try { osc.noteOff(0); } catch (e) {} }, 90); })(oscs[k]);
+            }
           } catch (e) {}
         }
       };
     } catch (e) { return { stop: function () {} }; }
   }
-  // 건반 하나를 누름 — 악기/더블링/에코 설정에 맞춰 1~2개 보이스를 울리고,
+  // 건반 하나를 누름 — 악기/더블링/에코 설정에 맞춰 1~2개 화음 그룹을 울리고,
   // 뗄 때 호출할 stop()을 돌려준다(에코가 켜져 있으면 뗄 때 짧은 꼬리를 남김)
   function liveNoteOn(midi, instrumentId, doubling, echoOn) {
     var inst = INSTRUMENTS[instrumentId] || INSTRUMENTS.piano;
     var m = midi + (inst.octave || 0) * 12, freq = midiToFreq(m);
-    var voices = [liveVoice(freq, inst.type, 0.16)];
-    if (doubling) voices.push(liveVoice(freq * 1.012, inst.type, 0.1));
+    var voices = [harmonicChord(freq, inst, 0.16)];
+    if (doubling) voices.push(harmonicChord(freq * 1.012, inst, 0.1));
     return {
       stop: function () {
         var i; for (i = 0; i < voices.length; i++) voices[i].stop();
-        if (echoOn) echo(freq, 0.18, inst.type, 0.08, 0, 3, 0.1, 0.5);
+        if (echoOn) playNoteEcho(freq, 0.18, inst, 0.08, 0, 3, 0.1, 0.5);
       }
     };
   }
+  // 길이가 정해진 음표 하나를 한 번만 재생 — 배음 합성 + 지수 감쇠 꼬리
+  // (미리듣기 / 저장된 멜로디를 효과음으로 쓸 때)
+  function playNote(freq, dur, inst, vol, delay) {
+    if (muted || !ctx) return;
+    try {
+      var t = ctx.currentTime + (delay || 0);
+      var group = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
+      group.connect(ctx.destination);
+      var dampen = (inst.dampenBase || 1.5) * Math.pow(freq / 440, 0.15);
+      var steps = 14, i, x, v;
+      group.gain.setValueAtTime(0.0001, t);
+      group.gain.linearRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.1));
+      for (i = 1; i <= steps; i++) {
+        x = i / steps;
+        v = Math.max(0.0001, vol * Math.pow(1 - x, dampen));
+        group.gain.linearRampToValueAtTime(v, t + dur * x);
+      }
+      var h, o, g;
+      for (i = 0; i < inst.harmonics.length; i++) {
+        h = inst.harmonics[i];
+        o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(freq * h[0], t);
+        g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
+        o.connect(g); g.connect(group);
+        if (o.start) { o.start(t); o.stop(t + dur + 0.05); } else { o.noteOn(t); o.noteOff(t + dur + 0.05); }
+      }
+    } catch (e) {}
+  }
+  // 같은 음을 점점 작아지며 되풀이(에코) — 배음 합성 버전(echo()의 악기 버전)
+  function playNoteEcho(freq, dur, inst, vol, delay, times, gap, decay) {
+    times = times || 3; gap = gap == null ? 0.09 : gap; decay = decay == null ? 0.55 : decay;
+    for (var i = 0; i < times; i++) playNote(freq, dur, inst, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap);
+  }
   // 녹음된 멜로디 하나를 길이가 정해진 음표들로 한 번만 재생(미리듣기 / 효과음으로 쓸 때)
-  function playVoices(freq, dur, type, delay, doubling, echoOn) {
-    function one(f, v) { if (echoOn) echo(f, dur, type, v, delay, 3, 0.09, 0.55); else tone(f, dur, type, v, delay); }
+  function playVoices(freq, dur, inst, delay, doubling, echoOn) {
+    function one(f, v) { if (echoOn) playNoteEcho(f, dur, inst, v, delay, 3, 0.09, 0.55); else playNote(f, dur, inst, v, delay); }
     if (doubling) { one(freq, 0.1); one(freq * 1.012, 0.08); } else one(freq, 0.13);
   }
   function playMelody(obj) {
@@ -250,7 +301,7 @@
     var inst = INSTRUMENTS[obj.instrument] || INSTRUMENTS.piano, i, note, m, freq;
     for (i = 0; i < obj.notes.length; i++) {
       note = obj.notes[i]; m = note.midi + (inst.octave || 0) * 12; freq = midiToFreq(m);
-      playVoices(freq, note.dur, inst.type, note.t, obj.doubling, obj.echo);
+      playVoices(freq, note.dur, inst, note.t, obj.doubling, obj.echo);
     }
   }
   // 저장된 멜로디(piano.html이 localStorage 'piano-list-v1'에 적어 둠)를 id로 찾는다
@@ -383,7 +434,7 @@
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 32,
+    version: 33,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -403,7 +454,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 32, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 33, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
