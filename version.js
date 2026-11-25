@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.3';
-window.APP_VERSION_NOTE = '피아노: 악기 소리를 배음 여러 개 합성+지수 감쇠 꼬리로 더 풍부하게(keithwhor/audiosynth 아이디어 참고)';
+window.APP_VERSION = '0.4.4';
+window.APP_VERSION_NOTE = '피아노: 건반을 6옥타브로 넓히고 가로 스크롤/핀치 확대축소 지원(도레미송 연주 가능)';
 window.APP_VERSION_DATE = '2026-11-25';

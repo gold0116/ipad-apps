@@ -14,16 +14,17 @@
   .row label { margin-right: 10px; }
   select { font-size: 15px; padding: 5px; }
   input[type=text] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; -webkit-box-sizing: border-box; box-sizing: border-box; }
-  #octWrap { display: inline-block; }
-  #octWrap button { font-size: 16px; padding: 4px 12px; border: 0; border-radius: 8px; background: #8a8f98; color: #fff; }
-  #piano { position: relative; height: 170px; margin: 10px 0; touch-action: none; }
+  #kbdBar { display: -webkit-flex; display: flex; align-items: center; justify-content: center; }
+  #kbdBar button { font-size: 16px; padding: 6px 14px; border: 0; border-radius: 8px; background: #8a8f98; color: #fff; margin: 0 3px; }
+  #pianoScroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; border-radius: 8px; }
+  #piano { position: relative; height: 170px; }
   #piano .wrow { display: -webkit-flex; display: flex; height: 100%; }
-  #piano .wkey { -webkit-flex: 1; flex: 1; background: #fff; border: 1px solid #c7ccd4; border-left-width: 0; border-radius: 0 0 6px 6px; position: relative; }
+  #piano .wkey { -webkit-flex-shrink: 0; flex-shrink: 0; background: #fff; border: 1px solid #c7ccd4; border-left-width: 0; border-radius: 0 0 6px 6px; position: relative; }
   #piano .wrow .wkey:first-child { border-left-width: 1px; }
-  #piano .wkey .lbl { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 12px; color: #999; }
+  #piano .wkey .lbl { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 11px; color: #999; }
   #piano .wkey.active { background: #dbe6ff; }
-  #piano .bkeys { position: absolute; top: 0; left: 0; width: 100%; height: 60%; }
-  #piano .bkey { position: absolute; top: 0; width: 9%; height: 100%; background: #2b2f36; border-radius: 0 0 4px 4px; }
+  #piano .bkeys { position: absolute; top: 0; left: 0; height: 60%; }
+  #piano .bkey { position: absolute; top: 0; height: 100%; background: #2b2f36; border-radius: 0 0 4px 4px; }
   #piano .bkey.active { background: #2f6fed; }
   #recBtn { font-size: 17px; padding: 12px 20px; border: 0; border-radius: 12px; background: #2f6fed; color: #fff; }
   #recBtn.on { background: #e5484d; }
@@ -40,12 +41,11 @@
 <body>
 <div class="top"><a href="index.html">‹ 홈</a> 피아노</div>
 <div class="wrap">
-  <p style="color:#666;font-size:14px;line-height:1.5">건반을 눌러 연주하고, "녹음 시작"으로 멜로디를 저장하세요. 저장한 멜로디는 아래 "효과음 교체"에서 다른 게임의 효과음으로 쓸 수 있어요.</p>
+  <p style="color:#666;font-size:14px;line-height:1.5">건반을 양옆으로 밀거나 두 손가락으로 확대/축소해서 연주하세요. "녹음 시작"으로 멜로디를 저장하면 아래 "효과음 교체"에서 다른 게임의 효과음으로 쓸 수 있어요.</p>
 
   <div class="card">
     <div class="row">
       악기 <select id="instr"></select>
-      <span id="octWrap">옥타브 <button id="octDown">－</button> <b id="octLabel">4</b> <button id="octUp">＋</button></span>
     </div>
     <div class="row">
       <label><input type="checkbox" id="doubling"> 더블링</label>
@@ -53,9 +53,17 @@
     </div>
   </div>
 
-  <div id="piano">
-    <div class="wrow" id="wrow"></div>
-    <div class="bkeys" id="bkeys"></div>
+  <div id="kbdBar">
+    <button id="scrollLeftBtn">◀</button>
+    <button id="zoomOut">－</button>
+    <button id="zoomIn">＋</button>
+    <button id="scrollRightBtn">▶</button>
+  </div>
+  <div id="pianoScroll">
+    <div id="piano">
+      <div class="wrow" id="wrow"></div>
+      <div class="bkeys" id="bkeys"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -145,7 +153,7 @@
   function $(i) { return document.getElementById(i); }
   function now() { return Date.now(); }
 
-  var list = [], instrument = 'piano', doubling = false, echoOn = false, octave = 4;
+  var list = [], instrument = 'piano', doubling = false, echoOn = false;
   var recording = false, recStartAt = 0, recNotes = [], recTimer = null, pendingMelody = null;
   var activeNotes = {};
 
@@ -154,31 +162,46 @@
   function fmt(sec) { sec = Math.round(sec * 10) / 10; return sec + '초'; }
 
   // ---- 건반 ----
-  var WHITES = [{ n: 'C', o: 0 }, { n: 'D', o: 2 }, { n: 'E', o: 4 }, { n: 'F', o: 5 }, { n: 'G', o: 7 }, { n: 'A', o: 9 }, { n: 'B', o: 11 }];
-  var BLACKS = [{ n: 'C#', o: 1, after: 0 }, { n: 'D#', o: 3, after: 1 }, { n: 'F#', o: 6, after: 3 }, { n: 'G#', o: 8, after: 4 }, { n: 'A#', o: 10, after: 5 }];
-  function octaveBase() { return 12 * (octave + 1); }
+  // "도레미송도 못 친다"는 피드백 — 1옥타브(7개)만 보이던 걸 6옥타브(C1~B6)를
+  // 전부 만들어두고, 옆으로 밀거나(네이티브 스크롤) 두 손가락으로 확대/축소해서
+  // 쓰도록 바꿈. 가로 화면으로 돌리면 더 많은 건반이 한 번에 보임(스크롤 영역이
+  // 넓어질 뿐 건반 자체는 그대로라 자동으로 해결됨).
+  var OCT_MIN = 1, OCT_MAX = 6;
+  var WHITE_SEMI = [0, 2, 4, 5, 7, 9, 11], WHITE_NAME = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  var BLACK_SEMI = [1, 3, 6, 8, 10], BLACK_AFTER = [0, 1, 3, 4, 5]; // 옥타브 내 "몇 번째 흰 건반" 바로 다음인지
+  var ZOOM_MIN = 0.6, ZOOM_MAX = 2.2, KEY_W_BASE = 40, zoom = 1;
+  try { var savedZoom = parseFloat(localStorage.getItem('piano-zoom')); if (savedZoom >= ZOOM_MIN && savedZoom <= ZOOM_MAX) zoom = savedZoom; } catch (e) {}
+  function keyW() { return KEY_W_BASE * zoom; }
   function buildPiano() {
-    var wrow = $('wrow'), bkeys = $('bkeys'), i, w, b, el, left;
+    var wrow = $('wrow'), bkeys = $('bkeys'), kw = keyW(), totalWhite = (OCT_MAX - OCT_MIN + 1) * 7;
     wrow.innerHTML = ''; bkeys.innerHTML = '';
-    for (i = 0; i < WHITES.length; i++) {
-      w = WHITES[i];
-      el = document.createElement('div'); el.className = 'wkey';
-      el.innerHTML = '<span class="lbl">' + w.n + '</span>';
-      bindKey(el, w.o);
-      wrow.appendChild(el);
+    $('piano').style.width = (totalWhite * kw) + 'px';
+    $('bkeys').style.width = (totalWhite * kw) + 'px';
+    var o, i, el, midi, afterGlobal;
+    for (o = OCT_MIN; o <= OCT_MAX; o++) {
+      for (i = 0; i < WHITE_SEMI.length; i++) {
+        midi = 12 * (o + 1) + WHITE_SEMI[i];
+        el = document.createElement('div'); el.className = 'wkey'; el.style.width = kw + 'px';
+        el.innerHTML = '<span class="lbl">' + WHITE_NAME[i] + (WHITE_NAME[i] === 'C' ? o : '') + '</span>';
+        bindKey(el, midi);
+        wrow.appendChild(el);
+      }
     }
-    for (i = 0; i < BLACKS.length; i++) {
-      b = BLACKS[i];
-      el = document.createElement('div'); el.className = 'bkey';
-      left = (b.after + 1) * (100 / 7) - 4.5;
-      el.style.left = left + '%';
-      bindKey(el, b.o);
-      bkeys.appendChild(el);
+    for (o = OCT_MIN; o <= OCT_MAX; o++) {
+      for (i = 0; i < BLACK_SEMI.length; i++) {
+        midi = 12 * (o + 1) + BLACK_SEMI[i];
+        afterGlobal = (o - OCT_MIN) * 7 + BLACK_AFTER[i];
+        el = document.createElement('div'); el.className = 'bkey';
+        el.style.width = (kw * 0.58) + 'px';
+        el.style.left = ((afterGlobal + 1) * kw - (kw * 0.58) / 2) + 'px';
+        bindKey(el, midi);
+        bkeys.appendChild(el);
+      }
     }
   }
-  function bindKey(el, offset) {
-    function on(e) { e.preventDefault(); el.className += ' active'; noteOn(octaveBase() + offset); }
-    function off(e) { e.preventDefault(); el.className = el.className.replace(/ active\b/, ''); noteOff(octaveBase() + offset); }
+  function bindKey(el, midi) {
+    function on(e) { el.className += ' active'; noteOn(midi); }
+    function off(e) { el.className = el.className.replace(/ active\b/, ''); noteOff(midi); }
     el.addEventListener('touchstart', on, false);
     el.addEventListener('touchend', off, false);
     el.addEventListener('touchcancel', off, false);
@@ -186,10 +209,42 @@
     el.addEventListener('mouseup', off, false);
     el.addEventListener('mouseleave', off, false);
   }
-  document.addEventListener('touchmove', function (e) {
-    var p = $('piano');
-    if (p && p.contains(e.target)) e.preventDefault();
+
+  // ---- 확대/축소(핀치) + 스크롤 버튼: 화면 확대율만 바뀌고, 핀치 중심이
+  // 가리키던 건반이 화면에서 그대로 유지되도록 스크롤 위치도 같이 보정한다 ----
+  function setZoom(z, anchorX) {
+    var box = $('pianoScroll'), oldKw = keyW();
+    if (anchorX == null) anchorX = box.clientWidth / 2;
+    var idx = (box.scrollLeft + anchorX) / oldKw;
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    try { localStorage.setItem('piano-zoom', String(zoom)); } catch (e) {}
+    buildPiano();
+    box.scrollLeft = idx * keyW() - anchorX;
+  }
+  var pinch = null;
+  function pinchLocal(t) { var r = $('pianoScroll').getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; }
+  function pinchDist(a, b) { var dx = b.x - a.x, dy = b.y - a.y; return Math.sqrt(dx * dx + dy * dy); }
+  $('pianoScroll').addEventListener('touchstart', function (e) {
+    if (e.touches.length >= 2) {
+      var a = pinchLocal(e.touches[0]), b = pinchLocal(e.touches[1]);
+      pinch = { dist: pinchDist(a, b), mid: (a.x + b.x) / 2 };
+    }
   }, false);
+  $('pianoScroll').addEventListener('touchmove', function (e) {
+    if (e.touches.length >= 2 && pinch) {
+      e.preventDefault();
+      var a = pinchLocal(e.touches[0]), b = pinchLocal(e.touches[1]);
+      var dist = pinchDist(a, b), mid = (a.x + b.x) / 2;
+      if (pinch.dist > 10) setZoom(zoom * (dist / pinch.dist), mid);
+      pinch.dist = dist; pinch.mid = mid;
+    }
+  }, false);
+  $('pianoScroll').addEventListener('touchend', function (e) { if (e.touches.length < 2) pinch = null; }, false);
+  $('pianoScroll').addEventListener('touchcancel', function () { pinch = null; }, false);
+  $('zoomOut').onclick = function () { setZoom(zoom / 1.2); };
+  $('zoomIn').onclick = function () { setZoom(zoom * 1.2); };
+  $('scrollLeftBtn').onclick = function () { $('pianoScroll').scrollLeft -= keyW() * 7; };
+  $('scrollRightBtn').onclick = function () { $('pianoScroll').scrollLeft += keyW() * 7; };
 
   function noteOn(midi) {
     if (activeNotes[midi]) return;
@@ -241,8 +296,6 @@
   })();
   $('doubling').onchange = function () { doubling = this.checked; };
   $('echoCk').onchange = function () { echoOn = this.checked; };
-  $('octDown').onclick = function () { if (octave > 1) { octave--; $('octLabel').textContent = octave; } };
-  $('octUp').onclick = function () { if (octave < 7) { octave++; $('octLabel').textContent = octave; } };
 
   // ---- 저장된 멜로디 목록 ----
   function render() {
@@ -345,6 +398,8 @@
   }
 
   buildPiano(); load(); render();
+  // 처음 열면 4옥타브(도레미파솔라시도를 치기 좋은 가운데쯤)가 왼쪽에 오도록
+  $('pianoScroll').scrollLeft = (4 - OCT_MIN) * 7 * keyW();
 })();
 </script>
 </body>
