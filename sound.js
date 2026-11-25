@@ -195,34 +195,61 @@
   // ---- piano.html(직접 친 멜로디 녹음) 지원: 악기(배음 합성 프리셋), 누르고
   // 있는 동안 우는 "라이브" 음, 녹음한 멜로디를 한 번만 재생하는 것 ----
   // 오실레이터 파형 하나만 쓰는 대신, 배음(정수 또는 정수에 가까운 배수)을
-  // 여러 개 겹쳐서(각자 상대 음량을 가진 sine) 소리를 입체적으로 만든다.
-  // 꼬리도 선형으로 깎지 않고 "음량 × (1-진행률)^dampen" 지수 곡선으로
-  // 감쇠시켜서, 오르간처럼 오래 지속되는 악기(dampenBase 작음)와 피아노/벨처럼
-  // 치면 바로 잦아드는 악기(dampenBase 큼)를 구분한다.
-  // (keithwhor/audiosynth, MIT 라이선스 — 배음 합성+지수 감쇠라는 아이디어만
-  // 참고해서 이 저장소의 실시간 오실레이터 구조에 맞게 새로 짬. 그쪽은 노트를
-  // 통째로 PCM(WAV)으로 미리 구워 재생하는 방식이라 건반을 누르고 있는 동안
-  // 우는(떼는 시점을 모르는) 우리 구조와는 안 맞아서 그 부분은 안 가져옴.)
+  // 여러 개 겹쳐서(각자 상대 음량을 가진 파형) 소리를 입체적으로 만든다.
+  // (keithwhor/audiosynth, MIT 라이선스 — 배음 합성이라는 아이디어만 참고해서
+  // 이 저장소의 실시간 오실레이터 구조에 맞게 새로 짬.)
+  //
+  // 소리 꼴(envelope)은 "ADSR"(Attack-Decay-Sustain-Release) — 눌렀을 때 바로
+  // 최대 음량까지 확 올라갔다가(Attack), 한 단계 더 깎여서(Decay) 쉬는 음량
+  // (Sustain, 건반을 누르고 있는 동안 유지되는 비율)까지 내려가고, 뗄 때
+  // 비로소 0으로 잦아든다(Release). 피아노/기타/벨처럼 치면 바로 잦아드는
+  // 악기는 sustain을 0에 가깝게(눌러도 안 붙잡힘), 오르간/현악처럼 계속
+  // 우는 악기는 sustain을 1에 가깝게 잡아서 표현한다.
+  // (g200kg/webaudio-tinysynth, Apache-2.0 — "떼는 시점까지 붙잡는 진짜
+  // sustain"이라는 아이디어를 참고. Web Audio의 setTargetAtTime(지수 곡선으로
+  // 목표값에 접근)을 Decay/Release 양쪽에 써서 그 곡선을 흉내냄.)
   var INSTRUMENTS = {
-    piano: { label: '피아노', harmonics: [[1, 1], [2, 0.55], [3, 0.2], [4, 0.08]], dampenBase: 2.2 },
-    organ: { label: '오르간', harmonics: [[1, 1], [2, 0.5], [4, 0.25]], dampenBase: 0.5 },
-    synth: { label: '신디', harmonics: [[1, 1], [2, 0.3], [3, 0.15]], dampenBase: 1.4 },
-    bell: { label: '벨', harmonics: [[1, 1], [2, 0.5], [3.01, 0.33], [4.2, 0.18]], dampenBase: 3.2 },
-    bass: { label: '베이스', harmonics: [[1, 1], [2, 0.25]], dampenBase: 1.6, octave: -1 }
+    piano:      { label: '피아노', harmonics: [[1, 1], [2, 0.55], [3, 0.2], [4, 0.08]], adsr: { a: 0.004, d: 0.35, s: 0.12, r: 0.25 } },
+    organ:      { label: '오르간', harmonics: [[1, 1], [2, 0.5], [4, 0.25]], adsr: { a: 0.015, d: 0.05, s: 0.95, r: 0.12 } },
+    synth:      { label: '신디', harmonics: [[1, 1], [2, 0.3], [3, 0.15]], adsr: { a: 0.01, d: 0.15, s: 0.6, r: 0.15 } },
+    bell:       { label: '벨', harmonics: [[1, 1], [2, 0.5], [3.01, 0.33], [4.2, 0.18]], adsr: { a: 0.002, d: 0.7, s: 0.04, r: 0.35 } },
+    bass:       { label: '베이스', harmonics: [[1, 1], [2, 0.25]], octave: -1, adsr: { a: 0.004, d: 0.25, s: 0.55, r: 0.15 } },
+    strings:    { label: '현악(스트링)', harmonics: [[1, 1], [2, 0.4], [3, 0.25], [4, 0.1]], adsr: { a: 0.09, d: 0.3, s: 0.85, r: 0.3 } },
+    brass:      { label: '금관(브라스)', harmonics: [[1, 1], [2, 0.6], [3, 0.4], [4, 0.2], [5, 0.1]], adsr: { a: 0.045, d: 0.1, s: 0.8, r: 0.15 } },
+    flute:      { label: '플루트', harmonics: [[1, 1], [2, 0.12], [3, 0.04]], adsr: { a: 0.035, d: 0.06, s: 0.9, r: 0.1 } },
+    clarinet:   { label: '클라리넷', harmonics: [[1, 1], [3, 0.5], [5, 0.2]], adsr: { a: 0.02, d: 0.08, s: 0.85, r: 0.12 } },
+    guitar:     { label: '기타(통기타)', harmonics: [[1, 1], [2, 0.45], [3, 0.2], [4, 0.08]], adsr: { a: 0.002, d: 0.4, s: 0.02, r: 0.25 } },
+    harp:       { label: '하프', harmonics: [[1, 1], [2, 0.35], [3, 0.15], [4, 0.06]], adsr: { a: 0.001, d: 0.55, s: 0.02, r: 0.3 } },
+    marimba:    { label: '마림바', harmonics: [[1, 1], [3.98, 0.18]], adsr: { a: 0.001, d: 0.3, s: 0.0, r: 0.15 } },
+    vibraphone: { label: '비브라폰', harmonics: [[1, 1], [4, 0.22]], adsr: { a: 0.002, d: 0.65, s: 0.08, r: 0.4 } },
+    musicbox:   { label: '뮤직박스', harmonics: [[1, 1], [2, 0.4], [4.2, 0.12]], adsr: { a: 0.001, d: 0.45, s: 0.0, r: 0.25 } },
+    kalimba:    { label: '칼림바', harmonics: [[1, 1], [2, 0.3], [4.3, 0.1]], adsr: { a: 0.001, d: 0.5, s: 0.0, r: 0.2 } },
+    accordion:  { label: '아코디언', harmonics: [[1, 1], [2, 0.3], [3, 0.35], [5, 0.12]], adsr: { a: 0.03, d: 0.08, s: 0.85, r: 0.1 } },
+    pad:        { label: '신스 패드', harmonics: [[1, 1], [2, 0.4], [3, 0.2]], adsr: { a: 0.28, d: 0.35, s: 0.8, r: 0.65 } },
+    squarelead: { label: '칩튠 리드(사각파)', harmonics: [[1, 1]], wave: 'square', adsr: { a: 0.004, d: 0.06, s: 0.65, r: 0.05 } },
+    sawlead:    { label: '신스 리드(톱니파)', harmonics: [[1, 1]], wave: 'sawtooth', adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.08 } },
+    subbass:    { label: '서브 베이스', harmonics: [[1, 1]], octave: -2, adsr: { a: 0.01, d: 0.12, s: 0.9, r: 0.15 } }
   };
+  var ADSR_DEFAULT = { a: 0.01, d: 0.15, s: 0.6, r: 0.15 };
   function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
-  // 배음 여러 개를 한 그룹으로 묶어서 울린다(그룹 전체를 gain 하나로 떼기 쉽게)
+  // 배음 여러 개를 한 그룹으로 묶어서 울린다(그룹 전체를 gain 하나로 떼기 쉽게).
+  // 건반을 누르고 있는 동안은 Attack→Decay→Sustain까지만 걸어 두고, 실제
+  // Release(0으로 잦아듦)는 stop()이 불릴 때(=뗄 때) 비로소 시작한다.
   function harmonicChord(freq, inst, vol) {
     if (muted || !ctx) return { stop: function () {} };
     try {
+      var adsr = inst.adsr || ADSR_DEFAULT, wave = inst.wave || 'sine';
       var group = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
       group.connect(ctx.destination);
-      group.gain.setValueAtTime(0.0001, ctx.currentTime);
-      group.gain.linearRampToValueAtTime(vol || 0.14, ctx.currentTime + 0.012);
+      var t0 = ctx.currentTime, peak = vol || 0.14, a = Math.max(0.003, adsr.a);
+      var sustainLevel = Math.max(0.0001, peak * adsr.s);
+      group.gain.setValueAtTime(0.0001, t0);
+      group.gain.linearRampToValueAtTime(peak, t0 + a);
+      group.gain.setTargetAtTime(sustainLevel, t0 + a, Math.max(0.02, adsr.d / 3));
       var oscs = [], i, h, o, g;
       for (i = 0; i < inst.harmonics.length; i++) {
         h = inst.harmonics[i];
-        o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq * h[0];
+        o = ctx.createOscillator(); o.type = wave; o.frequency.value = freq * h[0];
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
         o.connect(g); g.connect(group);
         if (o.start) o.start(); else o.noteOn(0);
@@ -233,12 +260,13 @@
         stop: function () {
           if (stopped || !ctx) return; stopped = true;
           try {
-            var t = ctx.currentTime;
+            var t = ctx.currentTime, rel = Math.max(0.03, adsr.r);
             group.gain.cancelScheduledValues(t); group.gain.setValueAtTime(group.gain.value, t);
-            group.gain.linearRampToValueAtTime(0.0001, t + 0.07);
+            group.gain.setTargetAtTime(0.0001, t, rel / 3);
+            var stopAt = t + rel * 4 + 0.05;
             for (var k = 0; k < oscs.length; k++) {
-              if (oscs[k].stop) oscs[k].stop(t + 0.09);
-              else (function (osc) { setTimeout(function () { try { osc.noteOff(0); } catch (e) {} }, 90); })(oscs[k]);
+              if (oscs[k].stop) oscs[k].stop(stopAt);
+              else (function (osc, ms) { setTimeout(function () { try { osc.noteOff(0); } catch (e) {} }, ms); })(oscs[k], (stopAt - t) * 1000);
             }
           } catch (e) {}
         }
@@ -259,30 +287,31 @@
       }
     };
   }
-  // 길이가 정해진 음표 하나를 한 번만 재생 — 배음 합성 + 지수 감쇠 꼬리
-  // (미리듣기 / 저장된 멜로디를 효과음으로 쓸 때)
+  // 길이가 정해진 음표 하나를 한 번만 재생 — 배음 합성 + ADSR
+  // (미리듣기 / 저장된 멜로디를 효과음으로 쓸 때). 길이(dur)가 짧으면
+  // Attack/Release를 그 안에 맞춰 줄인다.
   function playNote(freq, dur, inst, vol, delay) {
     if (muted || !ctx) return;
     try {
+      var adsr = inst.adsr || ADSR_DEFAULT, wave = inst.wave || 'sine';
       var t = ctx.currentTime + (delay || 0);
       var group = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
       group.connect(ctx.destination);
-      var dampen = (inst.dampenBase || 1.5) * Math.pow(freq / 440, 0.15);
-      var steps = 14, i, x, v;
+      var a = Math.max(0.003, Math.min(adsr.a, dur * 0.4));
+      var r = Math.max(0.015, Math.min(adsr.r, dur * 0.6));
+      var sustainLevel = Math.max(0.0001, vol * adsr.s);
+      var relStart = Math.max(t + a, t + dur - r);
       group.gain.setValueAtTime(0.0001, t);
-      group.gain.linearRampToValueAtTime(vol, t + Math.min(0.02, dur * 0.1));
-      for (i = 1; i <= steps; i++) {
-        x = i / steps;
-        v = Math.max(0.0001, vol * Math.pow(1 - x, dampen));
-        group.gain.linearRampToValueAtTime(v, t + dur * x);
-      }
-      var h, o, g;
+      group.gain.linearRampToValueAtTime(vol, t + a);
+      group.gain.setTargetAtTime(sustainLevel, t + a, Math.max(0.015, adsr.d / 3));
+      group.gain.setTargetAtTime(0.0001, relStart, r / 3);
+      var h, o, g, i, stopAt = t + dur + r + 0.05;
       for (i = 0; i < inst.harmonics.length; i++) {
         h = inst.harmonics[i];
-        o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(freq * h[0], t);
+        o = ctx.createOscillator(); o.type = wave; o.frequency.setValueAtTime(freq * h[0], t);
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
         o.connect(g); g.connect(group);
-        if (o.start) { o.start(t); o.stop(t + dur + 0.05); } else { o.noteOn(t); o.noteOff(t + dur + 0.05); }
+        if (o.start) { o.start(t); o.stop(stopAt); } else { o.noteOn(t); o.noteOff(stopAt); }
       }
     } catch (e) {}
   }
@@ -434,7 +463,7 @@
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 33,
+    version: 34,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -454,7 +483,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 33, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 34, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
