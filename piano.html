@@ -33,8 +33,8 @@
   #list .nm { font-size: 17px; font-weight: bold; }
   #list .sub { font-size: 13px; opacity: .75; margin: 2px 0 8px; }
   #list .btn { padding: 8px 16px; font-size: 15px; margin: 2px 4px 2px 0; }
-  #fxMap .frow { display: -webkit-flex; display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 15px; }
-  #fxMap .frow select { max-width: 55%; }
+  #fxMap .frow, #gameFxMap .frow { display: -webkit-flex; display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 15px; }
+  #fxMap .frow select, #gameFxMap .frow select { max-width: 55%; }
 </style>
 </head>
 <body>
@@ -76,16 +76,49 @@
   <ul id="list"></ul>
   <p id="empty" style="color:#888;font-size:15px;display:none">저장된 멜로디가 없어요. 위에서 녹음해보세요.</p>
 
-  <h2>효과음 교체</h2>
-  <p style="color:#666;font-size:14px;line-height:1.5">게임에서 나는 효과음을 저장한 멜로디로 바꿀 수 있어요(모든 게임에 공통 적용). "기본 소리"로 두면 원래 효과음 그대로예요.</p>
+  <h2>효과음 교체(전체 게임 공통)</h2>
+  <p style="color:#666;font-size:14px;line-height:1.5">게임에서 나는 효과음을 저장한 멜로디로 바꿀 수 있어요. 같은 이름의 효과음을 쓰는 게임 전부에 적용돼요(예: "시작"은 스네이크·공룡·벽돌깨기 등 8개 게임이 같이 씀). "기본 소리"로 두면 원래 효과음 그대로예요.</p>
   <div class="card" id="fxMap"></div>
+
+  <h2>게임별 효과음 교체</h2>
+  <p style="color:#666;font-size:14px;line-height:1.5">특정 게임 하나만 다른 소리로 바꾸고 싶으면 여기서 설정하세요. 위의 "전체 게임 공통" 설정보다 우선 적용돼요. "전체 게임 설정 따름"으로 두면 위 설정(또는 기본 소리)을 그대로 써요.</p>
+  <div class="card">
+    <div class="row">게임 <select id="gameSel"></select></div>
+    <div id="gameFxMap" style="margin-top:6px"></div>
+  </div>
 
   <p style="font-size:13px;color:#888;margin-top:16px">멜로디는 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요).</p>
 </div>
-<script src="sound.js?v=31"></script>
+<script src="sound.js?v=32"></script>
 <script>
 (function () {
-  var LIST_KEY = 'piano-list-v1', FXMAP_KEY = 'customFxMap-v1';
+  var LIST_KEY = 'piano-list-v1', FXMAP_KEY = 'customFxMap-v1', FXMAP_PAGES_KEY = 'customFxMapPages-v1';
+  // 각 게임 파일이 실제로 쓰는 효과음 이름 목록(grep으로 확인). 게임마다 다르게
+  // 바꾸고 싶을 때 "그 게임이 실제로 쓰는 소리"만 보여주기 위함.
+  var GAME_FX = {
+    '2048.html': ['over', 'start'],
+    'balldraw.html': ['point', 'pop', 'tick', 'win'],
+    'balloon.html': ['coin', 'drop', 'item', 'over', 'start'],
+    'breakout.html': ['bonk', 'clack', 'coin', 'drop', 'hit', 'item', 'line', 'move', 'over', 'rotate', 'start', 'win'],
+    'bubble.html': ['boom', 'drop', 'over', 'pop', 'shoot', 'start', 'tetris', 'tick', 'unflag', 'win'],
+    'chess.html': ['item', 'over', 'tetris'],
+    'dino.html': ['hit', 'jump', 'point', 'start'],
+    'gomoku.html': ['clack', 'over', 'tetris'],
+    'janggi.html': ['item', 'move', 'over', 'tetris'],
+    'memory.html': ['flip', 'match', 'mismatch', 'win'],
+    'mines.html': ['boom', 'reveal', 'start', 'win'],
+    'mole.html': ['bonk', 'pop', 'tick'],
+    'rushhour.html': ['move', 'win'],
+    'snake.html': ['coin', 'hit', 'start'],
+    'sudoku.html': ['tetris'],
+    'tetris.html': ['drop', 'move', 'over', 'rotate', 'start']
+  };
+  var GAME_LABELS = {
+    '2048.html': '2048', 'balldraw.html': '구슬 추첨', 'balloon.html': '풍선 모험', 'breakout.html': '벽돌깨기',
+    'bubble.html': '버블 슈터', 'chess.html': '체스', 'dino.html': '공룡 달리기', 'gomoku.html': '오목',
+    'janggi.html': '장기', 'memory.html': '짝맞추기', 'mines.html': '지뢰찾기', 'mole.html': '두더지 잡기',
+    'rushhour.html': '러시아워', 'snake.html': '스네이크', 'sudoku.html': '스도쿠', 'tetris.html': '테트리스'
+  };
   var FX_LABELS = {
     start: '시작', shoot: '발사(버블슈터)', jump: '점프(공룡)', coin: '동전/매치', item: '아이템 획득',
     hit: '피격/충돌', point: '점수', move: '이동', clack: '돌 놓기(오목·장기)', clackcap: '돌 잡기(오목·장기)',
@@ -215,7 +248,7 @@
       };
       li.appendChild(nm); li.appendChild(sub); li.appendChild(bp); li.appendChild(bd); ul.appendChild(li);
     })(list[i]);
-    renderFxMap();
+    renderFxMap(); renderGameFxMap();
   }
 
   // ---- 효과음 교체 ----
@@ -235,6 +268,39 @@
         var m = loadFxMap();
         if (sel.value) m[name] = sel.value; else delete m[name];
         saveFxMap(m);
+      };
+      row.appendChild(lab); row.appendChild(sel); box.appendChild(row);
+    })(names[i]);
+  }
+
+  // ---- 게임별 효과음 교체 ----
+  function loadFxMapPages() { try { return JSON.parse(localStorage.getItem(FXMAP_PAGES_KEY) || '{}'); } catch (e) { return {}; } }
+  function saveFxMapPages(map) { try { localStorage.setItem(FXMAP_PAGES_KEY, JSON.stringify(map)); } catch (e) {} }
+  (function initGameSel() {
+    var sel = $('gameSel'), pages = [], page, o;
+    for (page in GAME_FX) if (GAME_FX.hasOwnProperty(page)) pages.push(page);
+    pages.sort(function (a, b) { return (GAME_LABELS[a] || a) < (GAME_LABELS[b] || b) ? -1 : 1; });
+    for (var i = 0; i < pages.length; i++) { o = document.createElement('option'); o.value = pages[i]; o.textContent = GAME_LABELS[pages[i]] || pages[i]; sel.appendChild(o); }
+    sel.onchange = renderGameFxMap;
+  })();
+  function renderGameFxMap() {
+    var box = $('gameFxMap'), page = $('gameSel').value, names = (GAME_FX[page] || []).slice().sort();
+    var map = loadFxMapPages(), pageMap = map[page] || {};
+    box.innerHTML = '';
+    for (var i = 0; i < names.length; i++) (function (name) {
+      var row = document.createElement('div'); row.className = 'frow';
+      var lab = document.createElement('span'); lab.textContent = FX_LABELS[name] || name;
+      var sel = document.createElement('select');
+      var optDefault = document.createElement('option'); optDefault.value = ''; optDefault.textContent = '전체 게임 설정 따름'; sel.appendChild(optDefault);
+      for (var k = 0; k < list.length; k++) { var o = document.createElement('option'); o.value = list[k].id; o.textContent = list[k].name; sel.appendChild(o); }
+      sel.value = pageMap[name] || '';
+      sel.onchange = function () {
+        var m = loadFxMapPages();
+        if (!m[page]) m[page] = {};
+        if (sel.value) m[page][name] = sel.value; else delete m[page][name];
+        var empty = true; for (var kk in m[page]) if (m[page].hasOwnProperty(kk)) empty = false;
+        if (empty) delete m[page];
+        saveFxMapPages(m);
       };
       row.appendChild(lab); row.appendChild(sel); box.appendChild(row);
     })(names[i]);

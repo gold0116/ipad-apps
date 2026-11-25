@@ -262,11 +262,23 @@
     return null;
   }
   // 효과음 이름(예: 'start')을 사용자가 녹음한 멜로디로 바꿔치기하는 매핑
-  // (piano.html의 "효과음 교체"에서 설정, localStorage 'customFxMap-v1')
+  // (piano.html의 "효과음 교체(전체 게임 공통)"에서 설정, localStorage 'customFxMap-v1')
   function customFxFor(name) {
     try {
       var map = JSON.parse(localStorage.getItem('customFxMap-v1') || '{}');
       if (map[name]) return findMelody(map[name]);
+    } catch (e) {}
+    return null;
+  }
+  // 같은 효과음 이름이라도 "이 게임 페이지만" 다르게 배정한 게 있으면 그걸 우선
+  // (예: "시작" 소리가 스네이크·공룡·벽돌깨기 등 8개 게임에 공통인데, 벽돌깨기만
+  // 다른 멜로디로 쓰고 싶은 경우 — piano.html의 "게임별 효과음 교체"에서 설정,
+  // localStorage 'customFxMapPages-v1': {페이지파일명: {효과음이름: 멜로디id}})
+  function customFxForPage(name) {
+    try {
+      var page = location.pathname.split('/').pop() || 'index.html';
+      var pm = JSON.parse(localStorage.getItem('customFxMapPages-v1') || '{}');
+      if (pm[page] && pm[page][name]) return findMelody(pm[page][name]);
     } catch (e) {}
     return null;
   }
@@ -367,11 +379,11 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) {
-      var custom = customFxFor(name);
+      var custom = customFxForPage(name) || customFxFor(name);
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 31,
+    version: 32,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -391,7 +403,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 31, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 32, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
