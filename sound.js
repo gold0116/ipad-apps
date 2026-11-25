@@ -4,14 +4,25 @@
   var ctx = null, muted = false;
   try { muted = localStorage.getItem('sfxMuted') === '1'; } catch (e) {}
 
+  // 이 문서(document) 전체에 touchstart/touchend/mousedown/click/keydown마다
+  // 걸려 있어서(아이폰/아이패드는 사용자가 처음 터치한 "그 이벤트 안에서" 바로
+  // resume()/소리 재생을 해야만 잠금이 풀림) 건반을 한 번 누르고 뗄 때마다도
+  // 두 번씩(touchstart, touchend) 불린다. ctx가 이미 'running'이면(한 번
+  // 풀린 뒤에는 계속 그럼) 무음 버퍼를 또 만들어 재생할 필요가 없는데도
+  // 예전엔 매번 만들어서, 건반을 누를 때마다 쓸데없는 오디오 노드 생성이
+  // 하나 더 끼어들어 반응이 느려지는 원인이 됐음 — 'running'이 아닐 때만
+  // (처음 잠금 풀 때, 또는 백그라운드 갔다 와서 다시 suspended 됐을 때만)
+  // 그 트릭을 쓰도록 고침.
   function unlock() {
     if (!AC) return;
     if (!ctx) { try { ctx = new AC(); } catch (e) { return; } }
     try {
       if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
-      var b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource();
-      s.buffer = b; s.connect(ctx.destination);
-      if (s.start) s.start(0); else s.noteOn(0);
+      if (ctx.state !== 'running') {
+        var b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource();
+        s.buffer = b; s.connect(ctx.destination);
+        if (s.start) s.start(0); else s.noteOn(0);
+      }
     } catch (e) {}
     if (wanted && !playing) startMusic(false);
   }
@@ -235,7 +246,15 @@
   // 배음 여러 개를 한 그룹으로 묶어서 울린다(그룹 전체를 gain 하나로 떼기 쉽게).
   // 건반을 누르고 있는 동안은 Attack→Decay→Sustain까지만 걸어 두고, 실제
   // Release(0으로 잦아듦)는 stop()이 불릴 때(=뗄 때) 비로소 시작한다.
-  function harmonicChord(freq, inst, vol) {
+  //
+  // doubling(더블링)은 예전엔 이 harmonicChord 전체(배음 N개 + 포락선)를
+  // 통째로 한 번 더(디튠해서) 호출해서 노트 하나 누를 때 오디오 노드가
+  // 최대 2배까지 늘어났었다(배음 4개 악기라면 9개→18개). 아이패드2처럼
+  // 느린 기기에서 건반 반응이 느려지는 주된 원인이라, 포락선/그룹은
+  // 그대로 하나만 쓰고 "기본음(1번 배음)만" 살짝 디튠해서 한 개 더
+  // 끼워 넣는 식으로 가볍게 바꿈 — 합쳐 울리는 "두꺼운" 느낌은 거의
+  // 그대로 내면서 추가 노드는 오실레이터+게인 한 쌍(2개)뿐.
+  function harmonicChord(freq, inst, vol, doubling) {
     if (muted || !ctx) return { stop: function () {} };
     try {
       var adsr = inst.adsr || ADSR_DEFAULT, wave = inst.wave || 'sine';
@@ -251,6 +270,14 @@
         h = inst.harmonics[i];
         o = ctx.createOscillator(); o.type = wave; o.frequency.value = freq * h[0];
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
+        o.connect(g); g.connect(group);
+        if (o.start) o.start(); else o.noteOn(0);
+        oscs.push(o);
+      }
+      if (doubling) {
+        h = inst.harmonics[0];
+        o = ctx.createOscillator(); o.type = wave; o.frequency.value = freq * 1.012 * h[0];
+        g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1] * 0.75;
         o.connect(g); g.connect(group);
         if (o.start) o.start(); else o.noteOn(0);
         oscs.push(o);
@@ -278,19 +305,19 @@
   function liveNoteOn(midi, instrumentId, doubling, echoOn) {
     var inst = INSTRUMENTS[instrumentId] || INSTRUMENTS.piano;
     var m = midi + (inst.octave || 0) * 12, freq = midiToFreq(m);
-    var voices = [harmonicChord(freq, inst, 0.16)];
-    if (doubling) voices.push(harmonicChord(freq * 1.012, inst, 0.1));
+    var voice = harmonicChord(freq, inst, 0.16, doubling);
     return {
       stop: function () {
-        var i; for (i = 0; i < voices.length; i++) voices[i].stop();
-        if (echoOn) playNoteEcho(freq, 0.18, inst, 0.08, 0, 3, 0.1, 0.5);
+        voice.stop();
+        if (echoOn) playNoteEcho(freq, 0.18, inst, 0.08, 0, 3, 0.1, 0.5, doubling);
       }
     };
   }
   // 길이가 정해진 음표 하나를 한 번만 재생 — 배음 합성 + ADSR
   // (미리듣기 / 저장된 멜로디를 효과음으로 쓸 때). 길이(dur)가 짧으면
-  // Attack/Release를 그 안에 맞춰 줄인다.
-  function playNote(freq, dur, inst, vol, delay) {
+  // Attack/Release를 그 안에 맞춰 줄인다. doubling도 harmonicChord와 같은
+  // 이유로 전체를 또 재생하지 않고 기본음만 살짝 디튠해 하나 더 보탠다.
+  function playNote(freq, dur, inst, vol, delay, doubling) {
     if (muted || !ctx) return;
     try {
       var adsr = inst.adsr || ADSR_DEFAULT, wave = inst.wave || 'sine';
@@ -313,17 +340,24 @@
         o.connect(g); g.connect(group);
         if (o.start) { o.start(t); o.stop(stopAt); } else { o.noteOn(t); o.noteOff(stopAt); }
       }
+      if (doubling) {
+        h = inst.harmonics[0];
+        o = ctx.createOscillator(); o.type = wave; o.frequency.setValueAtTime(freq * 1.012 * h[0], t);
+        g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1] * 0.75;
+        o.connect(g); g.connect(group);
+        if (o.start) { o.start(t); o.stop(stopAt); } else { o.noteOn(t); o.noteOff(stopAt); }
+      }
     } catch (e) {}
   }
   // 같은 음을 점점 작아지며 되풀이(에코) — 배음 합성 버전(echo()의 악기 버전)
-  function playNoteEcho(freq, dur, inst, vol, delay, times, gap, decay) {
+  function playNoteEcho(freq, dur, inst, vol, delay, times, gap, decay, doubling) {
     times = times || 3; gap = gap == null ? 0.09 : gap; decay = decay == null ? 0.55 : decay;
-    for (var i = 0; i < times; i++) playNote(freq, dur, inst, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap);
+    for (var i = 0; i < times; i++) playNote(freq, dur, inst, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap, doubling);
   }
   // 녹음된 멜로디 하나를 길이가 정해진 음표들로 한 번만 재생(미리듣기 / 효과음으로 쓸 때)
   function playVoices(freq, dur, inst, delay, doubling, echoOn) {
-    function one(f, v) { if (echoOn) playNoteEcho(f, dur, inst, v, delay, 3, 0.09, 0.55); else playNote(f, dur, inst, v, delay); }
-    if (doubling) { one(freq, 0.1); one(freq * 1.012, 0.08); } else one(freq, 0.13);
+    if (echoOn) playNoteEcho(freq, dur, inst, 0.13, delay, 3, 0.09, 0.55, doubling);
+    else playNote(freq, dur, inst, 0.13, delay, doubling);
   }
   function playMelody(obj) {
     if (muted || !ctx || !obj || !obj.notes) return;
@@ -463,7 +497,7 @@
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 34,
+    version: 35,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -483,7 +517,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 34, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 35, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
