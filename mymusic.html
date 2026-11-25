@@ -65,6 +65,28 @@
   function say(t, err) { $('msg').className = err ? 'err' : 'ok'; $('msg').textContent = t; }
   function fmt(sec) { sec = Math.round(sec); return Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + (sec % 60); }
 
+  // ---- "피아노 대표 예제" 캐논 변주곡(파헬벨, 공개 도메인) 자동 등록 ----
+  // 유명한 그라운드 베이스(D-A-Bm-F#m-G-D-G-A, 2박씩 8개가 한 바퀴)를 깔고,
+  // 그 위에 멜로디를 "단순 제시 → 8분음표로 쪼갠 변주 → 단순 재현"
+  // 순서로 얹은 단순 편곡(바로크 "디비전" 변주 기법 참고, 원곡 그대로의
+  // 28개 변주 전곡은 아님). 사용자 기기에 한 번만 자동으로 추가해 두고,
+  // 지워도 다시 안 넣음(localStorage 플래그로 구분).
+  var CANON_SONG = {"name":"캐논 변주곡 (파헬벨)","bpm":84,"beats":64,"mix":"band","notes":[[0,50,1.8],[2,45,1.8],[4,47,1.8],[6,42,1.8],[8,43,1.8],[10,38,1.8],[12,43,1.8],[14,45,1.8],[16,50,1.8],[16,78,1.8],[18,45,1.8],[18,76,1.8],[20,47,1.8],[20,74,1.8],[22,42,1.8],[22,73,1.8],[24,43,1.8],[24,71,1.8],[26,38,1.8],[26,69,1.8],[28,43,1.8],[28,71,1.8],[30,45,1.8],[30,73,1.8],[32,50,1.8],[32,62,0.45],[32.5,64,0.45],[33,66,0.45],[33.5,67,0.45],[34,45,1.8],[34,69,0.45],[34.5,71,0.45],[35,73,0.45],[35.5,74,0.45],[36,47,1.8],[36,71,0.45],[36.5,73,0.45],[37,74,0.45],[37.5,76,0.45],[38,42,1.8],[38,66,0.45],[38.5,67,0.45],[39,69,0.45],[39.5,71,0.45],[40,43,1.8],[40,67,0.45],[40.5,69,0.45],[41,71,0.45],[41.5,73,0.45],[42,38,1.8],[42,62,0.45],[42.5,64,0.45],[43,66,0.45],[43.5,67,0.45],[44,43,1.8],[44,67,0.45],[44.5,69,0.45],[45,71,0.45],[45.5,73,0.45],[46,45,1.8],[46,69,0.45],[46.5,71,0.45],[47,73,0.45],[47.5,74,0.45],[48,50,1.8],[48,78,1.8],[50,45,1.8],[50,76,1.8],[52,47,1.8],[52,74,1.8],[54,42,1.8],[54,73,1.8],[56,43,1.8],[56,71,1.8],[58,38,1.8],[58,69,1.8],[60,43,1.8],[60,71,1.8],[62,45,1.8],[62,73,1.8]]};
+  function seedCanon() {
+    var FLAG = 'canonSeeded-v1', already = false;
+    try { already = !!localStorage.getItem(FLAG); } catch (e) { return; }
+    if (already) return;
+    try {
+      var exists = false, i;
+      for (i = 0; i < list.length; i++) if (list[i].name === CANON_SONG.name) exists = true;
+      if (!exists) {
+        list.push({ id: 's' + new Date().getTime(), name: CANON_SONG.name, count: CANON_SONG.notes.length, seconds: CANON_SONG.beats * 60 / CANON_SONG.bpm, text: JSON.stringify(CANON_SONG) });
+        store();
+      }
+    } catch (e) {}
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+  }
+
   function parseText(txt) {
     var o;
     try { o = JSON.parse(txt.replace(/^\s+|\s+$/g, '')); } catch (e) { return { ok: false, error: '텍스트 형식이 맞지 않아요. 변환 페이지에서 만든 텍스트를 처음부터 끝까지 그대로 붙여넣으세요.' }; }
@@ -146,7 +168,7 @@
     try { history.replaceState(null, '', location.pathname); } catch (e) { location.hash = ''; }
   }
 
-  load(); importFromHash(); render();
+  load(); seedCanon(); importFromHash(); render();
 })();
 </script>
 </body>

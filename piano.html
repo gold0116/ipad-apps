@@ -331,6 +331,27 @@
     autoTimers.push(setTimeout(function () { if (autoBtn === btn) { btn.textContent = '재생'; autoBtn = null; } }, endSec * 1000 + 60));
   }
 
+  // ---- "피아노 대표 예제" 캐논 변주곡(파헬벨, 공개 도메인) 자동 등록 ----
+  // "내 음악"에 넣은 것과 같은 곡(그라운드 베이스 + 단순 제시 → 8분음표
+  // 변주 → 단순 재현)을 한 손(피아노 악기 하나)으로 양손 치듯 전부 재생하는
+  // 형태로 넣어둠. 사용자 기기에 한 번만 자동으로 추가, 지워도 다시 안 넣음.
+  var CANON_PIANO = {"instrument":"piano","doubling":true,"echo":false,"notes":[{"t":0,"midi":50,"dur":1.286},{"t":1.429,"midi":45,"dur":1.286},{"t":2.857,"midi":47,"dur":1.286},{"t":4.286,"midi":42,"dur":1.286},{"t":5.714,"midi":43,"dur":1.286},{"t":7.143,"midi":38,"dur":1.286},{"t":8.571,"midi":43,"dur":1.286},{"t":10,"midi":45,"dur":1.286},{"t":11.429,"midi":50,"dur":1.286},{"t":11.429,"midi":78,"dur":1.286},{"t":12.857,"midi":45,"dur":1.286},{"t":12.857,"midi":76,"dur":1.286},{"t":14.286,"midi":47,"dur":1.286},{"t":14.286,"midi":74,"dur":1.286},{"t":15.714,"midi":42,"dur":1.286},{"t":15.714,"midi":73,"dur":1.286},{"t":17.143,"midi":43,"dur":1.286},{"t":17.143,"midi":71,"dur":1.286},{"t":18.571,"midi":38,"dur":1.286},{"t":18.571,"midi":69,"dur":1.286},{"t":20,"midi":43,"dur":1.286},{"t":20,"midi":71,"dur":1.286},{"t":21.429,"midi":45,"dur":1.286},{"t":21.429,"midi":73,"dur":1.286},{"t":22.857,"midi":50,"dur":1.286},{"t":22.857,"midi":62,"dur":0.321},{"t":23.214,"midi":64,"dur":0.321},{"t":23.571,"midi":66,"dur":0.321},{"t":23.929,"midi":67,"dur":0.321},{"t":24.286,"midi":45,"dur":1.286},{"t":24.286,"midi":69,"dur":0.321},{"t":24.643,"midi":71,"dur":0.321},{"t":25,"midi":73,"dur":0.321},{"t":25.357,"midi":74,"dur":0.321},{"t":25.714,"midi":47,"dur":1.286},{"t":25.714,"midi":71,"dur":0.321},{"t":26.071,"midi":73,"dur":0.321},{"t":26.429,"midi":74,"dur":0.321},{"t":26.786,"midi":76,"dur":0.321},{"t":27.143,"midi":42,"dur":1.286},{"t":27.143,"midi":66,"dur":0.321},{"t":27.5,"midi":67,"dur":0.321},{"t":27.857,"midi":69,"dur":0.321},{"t":28.214,"midi":71,"dur":0.321},{"t":28.571,"midi":43,"dur":1.286},{"t":28.571,"midi":67,"dur":0.321},{"t":28.929,"midi":69,"dur":0.321},{"t":29.286,"midi":71,"dur":0.321},{"t":29.643,"midi":73,"dur":0.321},{"t":30,"midi":38,"dur":1.286},{"t":30,"midi":62,"dur":0.321},{"t":30.357,"midi":64,"dur":0.321},{"t":30.714,"midi":66,"dur":0.321},{"t":31.071,"midi":67,"dur":0.321},{"t":31.429,"midi":43,"dur":1.286},{"t":31.429,"midi":67,"dur":0.321},{"t":31.786,"midi":69,"dur":0.321},{"t":32.143,"midi":71,"dur":0.321},{"t":32.5,"midi":73,"dur":0.321},{"t":32.857,"midi":45,"dur":1.286},{"t":32.857,"midi":69,"dur":0.321},{"t":33.214,"midi":71,"dur":0.321},{"t":33.571,"midi":73,"dur":0.321},{"t":33.929,"midi":74,"dur":0.321},{"t":34.286,"midi":50,"dur":1.286},{"t":34.286,"midi":78,"dur":1.286},{"t":35.714,"midi":45,"dur":1.286},{"t":35.714,"midi":76,"dur":1.286},{"t":37.143,"midi":47,"dur":1.286},{"t":37.143,"midi":74,"dur":1.286},{"t":38.571,"midi":42,"dur":1.286},{"t":38.571,"midi":73,"dur":1.286},{"t":40,"midi":43,"dur":1.286},{"t":40,"midi":71,"dur":1.286},{"t":41.429,"midi":38,"dur":1.286},{"t":41.429,"midi":69,"dur":1.286},{"t":42.857,"midi":43,"dur":1.286},{"t":42.857,"midi":71,"dur":1.286},{"t":44.286,"midi":45,"dur":1.286},{"t":44.286,"midi":73,"dur":1.286}]};
+  function seedCanonPiano() {
+    var FLAG = 'canonSeededPiano-v1', already = false, NAME = '캐논 변주곡 (파헬벨)';
+    try { already = !!localStorage.getItem(FLAG); } catch (e) { return; }
+    if (already) return;
+    try {
+      var exists = false, i;
+      for (i = 0; i < list.length; i++) if (list[i].name === NAME) exists = true;
+      if (!exists) {
+        var last = CANON_PIANO.notes[CANON_PIANO.notes.length - 1], seconds = last ? last.t + last.dur : 0;
+        list.push({ id: 'p' + new Date().getTime(), name: NAME, count: CANON_PIANO.notes.length, seconds: seconds, text: JSON.stringify(CANON_PIANO) });
+        store();
+      }
+    } catch (e) {}
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+  }
+
   // ---- 설정 ----
   (function initInstr() {
     var sel = $('instr'), ins = SFX.instruments(), i, o;
@@ -443,7 +464,7 @@
     }
   }
 
-  buildPiano(); load(); render();
+  buildPiano(); load(); seedCanonPiano(); render();
   // 처음 열면 4옥타브(도레미파솔라시도를 치기 좋은 가운데쯤)가 왼쪽에 오도록
   $('pianoScroll').scrollLeft = (4 - OCT_MIN) * 7 * keyW();
 })();
