@@ -288,9 +288,10 @@
       group.connect(instBus());
       var t0 = ctx.currentTime, peak = vol || 0.14, a = Math.max(0.003, adsr.a);
       var sustainLevel = Math.max(0.0001, peak * adsr.s);
+      var decayTau = Math.max(0.02, adsr.d / 3);
       group.gain.setValueAtTime(0.0001, t0);
       group.gain.linearRampToValueAtTime(peak, t0 + a);
-      group.gain.setTargetAtTime(sustainLevel, t0 + a, Math.max(0.02, adsr.d / 3));
+      group.gain.setTargetAtTime(sustainLevel, t0 + a, decayTau);
       var oscs = [], i, h, o, g;
       for (i = 0; i < inst.harmonics.length; i++) {
         h = inst.harmonics[i];
@@ -314,7 +315,19 @@
           if (stopped || !ctx) return; stopped = true;
           try {
             var t = ctx.currentTime, rel = Math.max(0.03, adsr.r);
-            group.gain.cancelScheduledValues(t); group.gain.setValueAtTime(group.gain.value, t);
+            // group.gain.value를 읽어서 "지금 값"으로 삼으면, 짧게 눌렀다 뗐을 때
+            // (Attack/Decay 곡선이 아직 끝나지 않은 시점) 그 값이 실제 소리와
+            // 안 맞을 수 있다 — 브라우저가 setTargetAtTime처럼 끝이 정해지지
+            // 않은 자동화 곡선의 "지금 순간 값"을 .value getter에 실시간으로
+            // 정확히 반영해 준다는 보장이 없고(특히 오래된 WebKit), 하필 안
+            // 맞을 때 음량이 갑자기 어긋난 값으로 뚝 떨어지며 "덜컥"하는 클릭
+            // 잡음이 남. 그래서 .value를 믿지 않고, 우리가 직접 건 자동화와
+            // 똑같은 공식(Attack=선형, Decay=setTargetAtTime과 같은 지수
+            // 근접식)으로 지금 시각의 값을 계산해서 그 값으로 끊는다.
+            var elapsed = t - t0, cur;
+            if (elapsed <= a) cur = 0.0001 + (peak - 0.0001) * Math.max(0, elapsed / a);
+            else cur = sustainLevel + (peak - sustainLevel) * Math.exp(-(elapsed - a) / decayTau);
+            group.gain.cancelScheduledValues(t); group.gain.setValueAtTime(cur, t);
             group.gain.setTargetAtTime(0.0001, t, rel / 3);
             var stopAt = t + rel * 4 + 0.05;
             for (var k = 0; k < oscs.length; k++) {
@@ -523,7 +536,7 @@
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 36,
+    version: 37,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -543,7 +556,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 36, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 37, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
