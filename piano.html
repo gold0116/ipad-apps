@@ -172,9 +172,10 @@
   var ZOOM_MIN = 0.6, ZOOM_MAX = 2.2, KEY_W_BASE = 40, zoom = 1;
   try { var savedZoom = parseFloat(localStorage.getItem('piano-zoom')); if (savedZoom >= ZOOM_MIN && savedZoom <= ZOOM_MAX) zoom = savedZoom; } catch (e) {}
   function keyW() { return KEY_W_BASE * zoom; }
+  var keyEls = {}; // midi번호 -> 건반 DOM(자동 연주 때 하이라이트용). 줌/재생성 때마다 새로 채움.
   function buildPiano() {
     var wrow = $('wrow'), bkeys = $('bkeys'), kw = keyW(), totalWhite = (OCT_MAX - OCT_MIN + 1) * 7;
-    wrow.innerHTML = ''; bkeys.innerHTML = '';
+    wrow.innerHTML = ''; bkeys.innerHTML = ''; keyEls = {};
     $('piano').style.width = (totalWhite * kw) + 'px';
     $('bkeys').style.width = (totalWhite * kw) + 'px';
     var o, i, el, midi, afterGlobal;
@@ -185,6 +186,7 @@
         el.innerHTML = '<span class="lbl">' + WHITE_NAME[i] + (WHITE_NAME[i] === 'C' ? o : '') + '</span>';
         bindKey(el, midi);
         wrow.appendChild(el);
+        keyEls[midi] = el;
       }
     }
     for (o = OCT_MIN; o <= OCT_MAX; o++) {
@@ -196,6 +198,7 @@
         el.style.left = ((afterGlobal + 1) * kw - (kw * 0.58) / 2) + 'px';
         bindKey(el, midi);
         bkeys.appendChild(el);
+        keyEls[midi] = el;
       }
     }
   }
@@ -288,6 +291,46 @@
   };
   $('discardBtn').onclick = function () { pendingMelody = null; $('saveCard').style.display = 'none'; };
 
+  // ---- 자동 연주: 저장된 멜로디를 재생하면서 건반이 저절로 눌리는 것처럼
+  // 하이라이트해준다. 실제 소리는 SFX.playMelody가 정확한 오디오 타이밍으로
+  // 틀고, 건반 하이라이트는 그와 별도로 setTimeout으로 흉내만 낸다(화면
+  // 표시용이라 샘플 단위 정확도까지는 필요 없음). 음이 화면 밖에 있으면
+  // 스크롤해서 보여준다.
+  var autoTimers = [], autoBtn = null;
+  function clearActiveHighlights() {
+    var i, active = document.querySelectorAll('#piano .active');
+    for (i = 0; i < active.length; i++) active[i].className = active[i].className.replace(/ active\b/, '');
+  }
+  function stopAutoPlay() {
+    for (var i = 0; i < autoTimers.length; i++) clearTimeout(autoTimers[i]);
+    autoTimers = [];
+    clearActiveHighlights();
+    if (autoBtn) { autoBtn.textContent = '재생'; autoBtn = null; }
+  }
+  function ensureKeyVisible(el) {
+    var box = $('pianoScroll'), elLeft = el.offsetLeft, elW = el.offsetWidth;
+    var viewLeft = box.scrollLeft, viewRight = viewLeft + box.clientWidth;
+    if (elLeft < viewLeft) box.scrollLeft = Math.max(0, elLeft - 20);
+    else if (elLeft + elW > viewRight) box.scrollLeft = elLeft + elW - box.clientWidth + 20;
+  }
+  function autoPlay(obj, btn) {
+    stopAutoPlay();
+    try { SFX.playMelody(obj); } catch (e) {}
+    btn.textContent = '정지'; autoBtn = btn;
+    var notes = obj.notes || [], i, note, el, endSec = 0;
+    for (i = 0; i < notes.length; i++) {
+      note = notes[i];
+      el = keyEls[note.midi];
+      if (note.t + note.dur > endSec) endSec = note.t + note.dur;
+      if (!el) continue;
+      (function (el, startMs, durMs) {
+        autoTimers.push(setTimeout(function () { el.className += ' active'; ensureKeyVisible(el); }, startMs));
+        autoTimers.push(setTimeout(function () { el.className = el.className.replace(/ active\b/, ''); }, startMs + durMs));
+      })(el, note.t * 1000, Math.max(30, note.dur * 1000));
+    }
+    autoTimers.push(setTimeout(function () { if (autoBtn === btn) { btn.textContent = '재생'; autoBtn = null; } }, endSec * 1000 + 60));
+  }
+
   // ---- 설정 ----
   (function initInstr() {
     var sel = $('instr'), ins = SFX.instruments(), i, o;
@@ -308,7 +351,10 @@
       var instLabel = ''; var ins = SFX.instruments(); for (var k = 0; k < ins.length; k++) if (ins[k].id === inst) instLabel = ins[k].label;
       var sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = '음 ' + s.count + '개 · ' + fmt(s.seconds) + (instLabel ? ' · ' + instLabel : '');
       var bp = document.createElement('button'); bp.className = 'btn'; bp.textContent = '재생';
-      bp.onclick = function () { try { SFX.playMelody(JSON.parse(s.text)); } catch (e) {} };
+      bp.onclick = function () {
+        if (autoBtn === bp) { stopAutoPlay(); return; }
+        try { autoPlay(JSON.parse(s.text), bp); } catch (e) {}
+      };
       var bd = document.createElement('button'); bd.className = 'btn gray'; bd.textContent = '삭제';
       bd.onclick = function () {
         if (!confirm('"' + s.name + '"을(를) 삭제할까요?')) return;
