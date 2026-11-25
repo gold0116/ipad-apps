@@ -237,9 +237,10 @@
     kalimba:    { label: '칼림바', harmonics: [[1, 1], [2, 0.3], [4.3, 0.1]], adsr: { a: 0.001, d: 0.5, s: 0.0, r: 0.2 } },
     accordion:  { label: '아코디언', harmonics: [[1, 1], [2, 0.3], [3, 0.35], [5, 0.12]], adsr: { a: 0.03, d: 0.08, s: 0.85, r: 0.1 } },
     pad:        { label: '신스 패드', harmonics: [[1, 1], [2, 0.4], [3, 0.2]], adsr: { a: 0.28, d: 0.35, s: 0.8, r: 0.65 } },
-    squarelead: { label: '칩튠 리드(사각파)', harmonics: [[1, 1]], wave: 'square', adsr: { a: 0.004, d: 0.06, s: 0.65, r: 0.05 } },
-    sawlead:    { label: '신스 리드(톱니파)', harmonics: [[1, 1]], wave: 'sawtooth', adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.08 } },
-    subbass:    { label: '서브 베이스', harmonics: [[1, 1]], octave: -2, adsr: { a: 0.01, d: 0.12, s: 0.9, r: 0.15 } }
+    squarelead:   { label: '칩튠 리드(사각파)', harmonics: [[1, 1]], wave: 'square', adsr: { a: 0.004, d: 0.06, s: 0.65, r: 0.05 } },
+    sawlead:      { label: '신스 리드(톱니파)', harmonics: [[1, 1]], wave: 'sawtooth', adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.08 } },
+    trianglelead: { label: '칩튠 리드(삼각파)', harmonics: [[1, 1]], wave: 'triangle', adsr: { a: 0.004, d: 0.07, s: 0.6, r: 0.05 } },
+    subbass:      { label: '서브 베이스', harmonics: [[1, 1]], octave: -2, adsr: { a: 0.01, d: 0.12, s: 0.9, r: 0.15 } }
   };
   var ADSR_DEFAULT = { a: 0.01, d: 0.15, s: 0.6, r: 0.15 };
   function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
@@ -536,7 +537,7 @@
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 37,
+    version: 38,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -556,7 +557,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 37, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 38, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
