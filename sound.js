@@ -243,6 +243,32 @@
   };
   var ADSR_DEFAULT = { a: 0.01, d: 0.15, s: 0.6, r: 0.15 };
   function midiToFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  // 건반을 빠르게 연달아 치면(특히 떼기 전에 다음 음을 누르는 레가토 연주)
+  // 노트마다 따로 만든 group이 전부 ctx.destination에 바로 꽂혀 있어서,
+  // 여러 음이 동시에 겹치는 순간 음량이 그대로 더해져 0dBFS를 넘기면서
+  // "깨지는"(clipping) 소리가 났다. 모든 악기 소리를 이 공용 버스 하나를
+  // 거쳐 나가게 하고, 그 버스에 DynamicsCompressorNode(여러 음이 겹쳐
+  // 커져도 부드럽게 눌러줌)를 하나 끼워서 겹침 자체를 막는 대신 겹쳐도
+  // 안 깨지게 만든다(아주 오래된 WebKit이라 compressor가 없으면 그냥
+  // 게인만 거쳐 나가게 fallback).
+  var instBusNode = null;
+  function instBus() {
+    if (instBusNode) return instBusNode;
+    var bus = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
+    bus.gain.value = 0.9;
+    try {
+      if (ctx.createDynamicsCompressor) {
+        var comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.knee.value = 24; comp.ratio.value = 10;
+        comp.attack.value = 0.003; comp.release.value = 0.15;
+        bus.connect(comp); comp.connect(ctx.destination);
+      } else {
+        bus.connect(ctx.destination);
+      }
+    } catch (e) { try { bus.connect(ctx.destination); } catch (e2) {} }
+    instBusNode = bus;
+    return bus;
+  }
   // 배음 여러 개를 한 그룹으로 묶어서 울린다(그룹 전체를 gain 하나로 떼기 쉽게).
   // 건반을 누르고 있는 동안은 Attack→Decay→Sustain까지만 걸어 두고, 실제
   // Release(0으로 잦아듦)는 stop()이 불릴 때(=뗄 때) 비로소 시작한다.
@@ -259,7 +285,7 @@
     try {
       var adsr = inst.adsr || ADSR_DEFAULT, wave = inst.wave || 'sine';
       var group = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
-      group.connect(ctx.destination);
+      group.connect(instBus());
       var t0 = ctx.currentTime, peak = vol || 0.14, a = Math.max(0.003, adsr.a);
       var sustainLevel = Math.max(0.0001, peak * adsr.s);
       group.gain.setValueAtTime(0.0001, t0);
@@ -323,7 +349,7 @@
       var adsr = inst.adsr || ADSR_DEFAULT, wave = inst.wave || 'sine';
       var t = ctx.currentTime + (delay || 0);
       var group = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
-      group.connect(ctx.destination);
+      group.connect(instBus());
       var a = Math.max(0.003, Math.min(adsr.a, dur * 0.4));
       var r = Math.max(0.015, Math.min(adsr.r, dur * 0.6));
       var sustainLevel = Math.max(0.0001, vol * adsr.s);
@@ -497,7 +523,7 @@
       if (custom) { playMelody(custom); return; }
       if (FX[name]) FX[name]();
     },
-    version: 35,
+    version: 36,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -517,7 +543,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 35, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 36, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
