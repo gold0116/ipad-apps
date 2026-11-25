@@ -66,51 +66,59 @@
     return board[r][c];
   }
 
-  // 레벨마다 맵 "모양"(채워진 칸의 윤곽)을 다르게 해서 매번 똑같은 사각
-  // 블록으로만 보이지 않게 한다(참고한 panthitech/BubbleShooter는 레벨마다
-  // 삼각형·다이아몬드·고리 모양 등 손으로 짠 모양 데이터를 씀 — 여기선
-  // 그 "모양이 바뀐다"는 아이디어만 가져와 절차적으로 4가지를 순환시킴).
-  // 행 r에서 [lo,hi] 구간만 채우도록 돌려주고, 그 밖은 빈 칸으로 둔다.
-  function shapeRange(kind, r, rows, len) {
-    var center = (len - 1) / 2, lo, hi, half;
-    if (kind === 1) { // 삼각형: 위가 좁고 아래로 갈수록 넓어짐
-      half = Math.max(1, Math.round(((r + 1) / rows) * (len / 2)));
-    } else if (kind === 2) { // 다이아몬드: 가운데 줄이 가장 넓음
-      var t = rows > 1 ? r / (rows - 1) : 0.5;
-      half = Math.max(1, Math.round((1 - Math.abs(t - 0.5) * 2) * (len / 2)));
-    } else if (kind === 3 && r >= 2 && r < rows - 2) { // 고리: 맨 위/아래 두 줄만 꽉 채우고 중간은 가장자리만
-      var band = Math.max(1, Math.floor(len * 0.25));
-      return [[0, band - 1], [len - band, len - 1]];
-    } else { // 사각형(기본) 또는 고리의 위/아래 "테두리" 줄
-      return [[0, len - 1]];
-    }
-    lo = Math.max(0, Math.floor(center - half)); hi = Math.min(len - 1, Math.ceil(center + half));
-    return [[lo, hi]];
+  // ---- 레벨 맵: panthitech/BubbleShooter(공개 저장소)의 실제 레벨 데이터를
+  // 가져와 씀(절차적으로 모양만 흉내내던 이전 방식 대신) ----
+  // 그 게임은 레벨마다 11칸 고정 폭 격자(mBubble, 홀수 줄은 반 칸 오른쪽으로
+  // 밀려 렌더링)에 글자로 내용을 적어 둠: '0'=빈칸, 소문자 r/g/b/y=보통
+  // 색 구슬, 대문자 R/G/B/Y=자물쇠 구슬(처음 터뜨리면 그 색 보통 구슬로
+  // 풀림), 'o'/'O'=돌 구슬(큰 쪽 'O'는 원래 2번 맞아야 하지만 여기선 단순화
+  // 해서 똑같이 1칸짜리 돌 구슬로 취급), '+'=돌/아이템 구슬에 딸린 보조
+  // 칸(여기엔 없는 "아이템 모으기" 모드 전용이라 빈 칸으로 둠).
+  // 이 게임판은 11칸 고정 폭이 아니라 짝/홀수 줄이 8/7칸으로 번갈아 (폭이
+  // 다른) 벌집 격자라서, 각 줄을 원본의 11칸 폭에서 이 게임 폭으로, 또
+  // 전체 줄 수를 최대 10줄로 최근접 샘플링해서 맞춤(모양과 색 배치의
+  // 전체적인 비율은 그대로 유지, 세부 해상도만 이 게임판 크기에 맞게 줄임).
+  // "pop"(색 맞추기) 유형 레벨 중 1~16 안에서 서로 겹치지 않는 8개를 골랐고
+  // (2·4·7·12는 10줄이 넘어가 세로로도 리샘플링됨), 그 뒤 레벨은 이 8개를
+  // 돌려씀(원작 자체도 17번부터 1~3번을 그대로 반복하는 구조라 같은 방식).
+  var IMPORTED_LEVELS = [
+    ['0yyyrrrbbb0', '0yybrrybb00', '00ybbryyb00', '00bbbyyy000', '000bbryy000', '000brry0000', '0000rrr0000', '0000rr00000', '00000r00000'],
+    ['00rrrrrrr00', '00rrrrrr000', '000yyyyy000', '000yyyy0000', '0000bbb0000', '0000bb00000', '0000yyy0000', '000rrrr0000', '000yyyyy000', '0000rr00000', '00000y00000', '0000bb00000', '0000bbb0000', '0000bb00000', '0000bbb0000', '0000bb00000', '00000r00000', '0000rr00000', '0000rrr0000', '0000rr00000', '00000r00000', '000yyyy0000', '0000yyy0000', '0000yy00000', '00000y00000'],
+    ['0bbrrrrrbb0', '0bbrrrrbb00', '00bbrrrbb00', '00bbrrbb000', '000bbrbb000', '0rr0yy0rr00', '00rryyyrr00', '0yy0rr0yy00', '00yyrrryy00', '0r00yy00r00', '00r0yyy0r00', '00rrrrrr000'],
+    ['rryyybbb000', 'rryyybbb000', '0rr00000000', '0bb00000000', '00bbyyrrrbb', '00bbyyrrbb0', '00000000bb0', '0000000yy00', 'yybbbrryy00', 'yybbrryy000', '0yy00000000', '0rr00000000', '00rrbbyyyrr', '00rrbbyyrr0', '00000000rr0', '0000000bb00', '0rrryyybb00', 'rrryyybb000'],
+    ['0gggbbbggg0', '0gggbbggg00', '0bbbybrbbb0', '0bbyyrrbb00', '0ybggbggbr0', '0yygbbgrr00', '00yybbbrr00', '0rrggggyy00', '00rrygryy00', '00ryyrry000', '000brbyg000', '00brbbyg000', '00brbbbyg00', '0brggggyg00', '00brbbbyg00', '00brbbyg000', '000brbyg000', '000bryg0000', '0000b0g0000'],
+    ['rryyy0rrryy', 'rryyyrrryy0', '0rryybrryy0', '0rrybbryy00', '00rrbbbyy00', '0bbgrrgbb00', '0bbggrggbb0', '0bbgyygbb00', '00bryyyrb00', '00rryyrr000', '00bbbgbbb00', '0rbbggbbr00', '0rrbgggbrr0', 'rrrggggrrr0', '000ybbby000', '00yybbyy000', '00yyybyyy00', '0rrrrgggg00', '00rrr0ggg00', '0yry00ygy00', '00yy000yy00', '00y0000y000'],
+    ['00RRRRRRR00', '0RyyyyyyR00', '00bbBBBBr00', '0bbrrrrBr00', '0bbBBBBBBr0', 'bbYyyyyrrr0', 'bbYYYYYYbbb', 'yyrrrrrBbb0', '0yyBBBBBBb0', '0yyByyyyy00', '00RRRRRRR00', '0RyyyyyyR00', '00RyyyyyR00', '00RyyyyR000', '000RRyRR000'],
+    ['yyybrrrgyyy', 'yybbrrggyy0', '0yoooroooy0', '0bbbbgggg00', '0+O+ooo+O+0', 'yybbrrggyy0', '0yyoyryoyy0', '0boobgoog00', '00bbbrggg00', '0+O+oo+O+00', '0oyyyorrro0', '0oyyoorro00', '00oyo0oro00', '00oo00oo000', '000o000o000']
+  ];
+  function importedCellFromChar(ch) {
+    if (ch === 'r') return { kind: 'normal', c: 0 };
+    if (ch === 'b') return { kind: 'normal', c: 1 };
+    if (ch === 'g') return { kind: 'normal', c: 2 };
+    if (ch === 'y') return { kind: 'normal', c: 3 };
+    if (ch === 'R') return { kind: 'locked', c: 0, hp: 1 };
+    if (ch === 'B') return { kind: 'locked', c: 1, hp: 1 };
+    if (ch === 'G') return { kind: 'locked', c: 2, hp: 1 };
+    if (ch === 'Y') return { kind: 'locked', c: 3, hp: 1 };
+    if (ch === 'o' || ch === 'O') return { kind: 'obstacle' };
+    return null; // '0'(빈 칸), '+'/'x'/'X'(여긴 없는 "아이템 모으기" 전용 칸) — 전부 빈 칸으로
   }
-  // 난이도에 따라 시작 보드를 절차적으로 만든다(레벨이 올라갈수록 줄 수·색 수·특수 구슬 비율 증가)
-  function genLevel(n) {
-    var rows = Math.min(5 + Math.floor(n / 2), 10);
-    var nColors = Math.min(3 + Math.floor(n / 3), COLORS.length);
-    var lockChance = n >= 3 ? Math.min(0.04 + n * 0.01, 0.16) : 0;
-    var obstChance = n >= 4 ? Math.min(0.03 + n * 0.008, 0.12) : 0;
-    var lockHp = n >= 7 ? 2 : 1;
-    var shapeKind = n % 4; // 0=사각형, 1=삼각형, 2=다이아몬드, 3=고리 — 레벨마다 순환
-    var b = [], r, c, roll, len, bands, filled, bi;
+  function boardFromImportedLevel(srcRows) {
+    var srcN = srcRows.length, rows = Math.min(srcN, 10);
+    var b = [], r, c, len, srcR, srcC;
     for (r = 0; r < rows; r++) {
       b.push([]);
       len = rowLen(r);
-      bands = shapeRange(shapeKind, r, rows, len);
+      srcR = rows > 1 ? Math.round(r * (srcN - 1) / (rows - 1)) : 0;
       for (c = 0; c < len; c++) {
-        filled = false;
-        for (bi = 0; bi < bands.length; bi++) if (c >= bands[bi][0] && c <= bands[bi][1]) filled = true;
-        if (!filled) { b[r].push(null); continue; }
-        roll = Math.random();
-        if (roll < obstChance) b[r].push({ kind: 'obstacle' });
-        else if (roll < obstChance + lockChance) b[r].push({ kind: 'locked', c: Math.floor(Math.random() * nColors), hp: lockHp });
-        else b[r].push({ kind: 'normal', c: Math.floor(Math.random() * nColors) });
+        srcC = len > 1 ? Math.round(c * 10 / (len - 1)) : 5;
+        b[r].push(importedCellFromChar(srcRows[srcR].charAt(srcC)));
       }
     }
     return b;
+  }
+  function genLevel(n) {
+    return boardFromImportedLevel(IMPORTED_LEVELS[(n - 1) % IMPORTED_LEVELS.length]);
   }
   function computeShotsBudget(b) {
     var n = 0, r, c;
