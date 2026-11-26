@@ -103,7 +103,7 @@
 
   <p style="font-size:13px;color:#888;margin-top:16px">멜로디는 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요).</p>
 </div>
-<script src="sound.js?v=43"></script>
+<script src="sound.js?v=44"></script>
 <script src="vendor/webaudiofont/WebAudioFontPlayer.js?v=1"></script>
 <script>
 (function () {
@@ -210,12 +210,19 @@
       }
     }
   }
+  // 짧게 눌렀다 뗄 때 "뗄 때도 한 번 더" 소리가 나던 문제: touchstart/touchend에서
+  // preventDefault()를 안 해서, 떼고 나면 브라우저가 호환성 때문에 그 자리에
+  // mousedown/mouseup을 가짜로 한 번 더 만들어 보내고 있었음 — 그게 noteOn/
+  // noteOff를 한 번 더 불러서 진짜 "두 번째 입력"이 됐던 것(합성 효과음은
+  // 공격(attack)이 부드러워 안 들리다가, 타격감 있는 실제 피아노 샘플로
+  // 바꾸고 나서야 또렷하게 들리게 됨). 터치 쪽에서 preventDefault()로 그
+  // 가짜 마우스 이벤트 자체를 안 만들게 막음.
   function bindKey(el, midi) {
     function on(e) { el.className += ' active'; noteOn(midi); }
     function off(e) { el.className = el.className.replace(/ active\b/, ''); noteOff(midi); }
-    el.addEventListener('touchstart', on, false);
-    el.addEventListener('touchend', off, false);
-    el.addEventListener('touchcancel', off, false);
+    el.addEventListener('touchstart', function (e) { e.preventDefault(); on(e); }, false);
+    el.addEventListener('touchend', function (e) { e.preventDefault(); off(e); }, false);
+    el.addEventListener('touchcancel', function (e) { e.preventDefault(); off(e); }, false);
     el.addEventListener('mousedown', on, false);
     el.addEventListener('mouseup', off, false);
     el.addEventListener('mouseleave', off, false);

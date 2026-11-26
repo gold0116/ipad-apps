@@ -361,6 +361,24 @@
     } catch (e) { waf.failed = true; }
   }
   function wafReady() { return !!(waf.player && waf.preset); }
+  // WebAudioFont 엔진 자신의 envelope.cancel()은 내부적으로
+  // gain.cancelScheduledValues(0)을 쓰는데(끝이 아니라 "시간 0"부터 전부
+  // 지움), 그러면 attack 시작점의 setValueAtTime까지 같이 지워져서 그
+  // 순간 GainNode 기본값인 1.0(최대 음량)으로 튀어 올랐다가 줄어듦 —
+  // 건반을 짧게 눌렀다 떼면 뗄 때 "둥" 하고 한 번 더 울리는 것처럼 들리는
+  // 원인이었음(실기로 확인된 버그). 그 함수를 쓰지 않고, 지금 이 순간부터만
+  // 잘라서(cancelScheduledValues(now)) 그 값을 그대로 고정한 뒤(setValueAtTime)
+  // 짧게 0으로 내리는 안전한 릴리즈를 직접 구현해 피함.
+  function wafRelease(env, rel) {
+    if (!env || !ctx) return;
+    try {
+      var now = ctx.currentTime;
+      env.gain.cancelScheduledValues(now);
+      env.gain.setValueAtTime(env.gain.value, now);
+      env.gain.linearRampToValueAtTime(0.0001, now + rel);
+      if (env.audioBufferSourceNode && env.audioBufferSourceNode.stop) env.audioBufferSourceNode.stop(now + rel + 0.02);
+    } catch (e) {}
+  }
   // 건반 하나를 누름 — 악기/더블링/에코 설정에 맞춰 1~2개 화음 그룹을 울리고,
   // 뗄 때 호출할 stop()을 돌려준다(에코가 켜져 있으면 뗄 때 짧은 꼬리를 남김)
   function liveNoteOn(midi, instrumentId, doubling, echoOn) {
@@ -371,8 +389,8 @@
       var env2 = doubling ? waf.player.queueWaveTable(ctx, instBus(), waf.preset, ctx.currentTime, midi + 0.12, 30, 0.4) : null;
       return {
         stop: function () {
-          if (env && env.cancel) env.cancel();
-          if (env2 && env2.cancel) env2.cancel();
+          wafRelease(env, 0.12);
+          wafRelease(env2, 0.12);
           // 오실레이터 쪽 playNoteEcho와 같은 모양(점점 작아지며 3번 반복)을
           // 샘플 재생으로 그대로 흉내냄
           if (echoOn) {
@@ -698,7 +716,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 43,
+    version: 44,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -727,7 +745,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 43, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 44, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

@@ -3,6 +3,37 @@
 > 다음 세션 시작할 때 이 문서부터 읽으면 맥락 복구에 도움 됩니다.
 > 지켜야 할 "규칙"은 여기가 아니라 `CLAUDE.md`에 있습니다.
 
+## 2026-11-26 세션 요약 (피아노: 짧게 눌렀다 떼면 뗄 때도 소리 나던 버그 고침)
+
+사용자: "소리가 좋은 건 확인했어. 그런데 짧게 누르면 놓을때도 둥 소리가
+나. 그래서 2번 누른것처럼 소리가 들려. 수정해줘." — 실기(폰)에서 확인한
+피드백.
+
+- 처음엔 WebAudioFont 엔진 자신의 `envelope.cancel()`(`gain.
+  cancelScheduledValues(0)` 뒤 `setTargetAtTime`로 줄임)이 범인인가 의심해서
+  (시간 0부터 전부 지우면 GainNode 기본값 1.0으로 순간 튀어오를 수 있음)
+  Playwright+OfflineAudioContext로 실제 렌더링된 파형을 직접 비교까지
+  해봤는데, 적어도 이 Chromium에서는 그 경로가 깨끗했음 — 엉뚱한 가설이었음.
+  (그래도 `cancelScheduledValues(0)`보다 `cancelScheduledValues(now)` +
+  `setValueAtTime`로 현재값을 못박는 쪽이 더 안전한 표준 관례라 이 수정
+  (`wafRelease`)은 그대로 남겨둠 — 해는 없고 더 안전함.)
+- 진짜 원인은 `piano.html`의 건반 터치 핸들러(`bindKey`)가 `touchstart`/
+  `touchend`에서 `preventDefault()`를 안 하고 있었던 것 — 그래서 손을 뗀
+  직후 브라우저가 호환성 때문에 그 자리에 **가짜 mousedown/mouseup을 한 번
+  더** 만들어 보내고 있었고, 그게 `noteOn`/`noteOff`를 다시 호출해서 "뗄 때
+  마다 새 소리가 한 번 더" 나는 것이었음. 지금까지는 합성 효과음의 공격
+  (attack)이 부드러워서 안 들리다가, 타격감 있는 실제 피아노 샘플로 바꾸고
+  나서야 또렷하게 들리게 된 것(버그 자체는 전부터 있었음).
+  Playwright로 실제 터치 디스패치(CDP, `locator.tap()`)를 써서 직접 재현:
+  `preventDefault()`를 끄면 탭 한 번에 `liveNoteOn`이 2번(진짜+가짜) 불리고,
+  살리면 1번만 불리는 것까지 확인.
+- 고침: `touchstart`/`touchend`/`touchcancel` 리스너에서 `e.preventDefault()`
+  호출(이 저장소의 다른 터치 게임들이 이미 쓰는 것과 같은 패턴). 이게 핵심
+  수정.
+- sound.js 공용 모듈 변경(`wafRelease` 추가)이라 버전 44로 올리고 모든 html의
+  `sound.js?v=` 쿼리 일괄 반영. app.appcache v98→v99. version.js
+  0.4.21→0.4.22. **iPad 2 실기 미확인**.
+
 ## 2026-11-26 세션 요약 (피아노: "피아노" 악기를 WebAudioFont 실제 샘플로)
 
 사용자: "261126_WebAudioFont_guide.md 문서 참고해줘. 피아노 음질 개선 가능할
