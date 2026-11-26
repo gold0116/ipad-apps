@@ -415,12 +415,14 @@
     } catch (e) {}
     return null;
   }
-  // 효과음 이름(예: 'start')을 사용자가 녹음한 멜로디로 바꿔치기하는 매핑
+  // 효과음 이름(예: 'start')을 사용자가 녹음한 멜로디 "id"로 바꿔치기하는 매핑
   // (piano.html의 "효과음 교체(전체 게임 공통)"에서 설정, localStorage 'customFxMap-v1')
-  function customFxFor(name) {
+  // — id가 멜로디인지 아래 SFX_CLIPS(오디오 파일)인지는 여기서 안 가리고,
+  // 실제로 재생하는 SFX.play()에서 findClip/findMelody 순서로 가려낸다.
+  function customIdFor(name) {
     try {
       var map = JSON.parse(localStorage.getItem('customFxMap-v1') || '{}');
-      if (map[name]) return findMelody(map[name]);
+      if (map[name]) return map[name];
     } catch (e) {}
     return null;
   }
@@ -428,13 +430,57 @@
   // (예: "시작" 소리가 스네이크·공룡·벽돌깨기 등 8개 게임에 공통인데, 벽돌깨기만
   // 다른 멜로디로 쓰고 싶은 경우 — piano.html의 "게임별 효과음 교체"에서 설정,
   // localStorage 'customFxMapPages-v1': {페이지파일명: {효과음이름: 멜로디id}})
-  function customFxForPage(name) {
+  function customIdForPage(name) {
     try {
       var page = location.pathname.split('/').pop() || 'index.html';
       var pm = JSON.parse(localStorage.getItem('customFxMapPages-v1') || '{}');
-      if (pm[page] && pm[page][name]) return findMelody(pm[page][name]);
+      if (pm[page] && pm[page][name]) return pm[page][name];
     } catch (e) {}
     return null;
+  }
+
+  // ---- 참고했던 게임 저장소에서 가져온 실제 효과음 파일 ----
+  // 지금까지 효과음은 전부 이 파일이 직접 합성한 소리뿐이었는데, 사용자가
+  // "그동안 참고한 게임들의 진짜 효과음을 모아서 피아노 페이지에 등록해달라"고
+  // 요청해서 추가. 참고했던 저장소 중 실제 오디오 에셋이 들어있던 건
+  // panthitech/BubbleShooter(Android, Apache-2.0 — 벽돌깨기/버블 슈터 레벨
+  // 데이터를 가져올 때 참고한 바로 그 저장소)뿐이었음(szejkerek/ArkanoidGameClone,
+  // ihansolo/rush-hour-app, lazygyu/roulette는 오디오 파일이 아예 없었음).
+  // 원본은 44.1kHz 스테레오 WAV(합쳐서 수 MB)라 오프라인 앱캐시에 넣기엔
+  // 커서, 모노 96kbps mp3로 다시 인코딩해(짧은 효과음이라 음질 차이는
+  // 거의 안 느껴짐, 총 용량 약 420KB) sfx/ 폴더에 넣어둠. 배경음악 트랙 2개
+  // (happy_and_joyful_children/village)는 효과음이 아니라서 제외.
+  var SFX_CLIPS = [
+    { id: 'bs_bubble_shoot', name: '구슬 발사', src: 'sfx/bubble_shoot.mp3' },
+    { id: 'bs_fire_bubble_shoot', name: '특수 구슬 발사', src: 'sfx/fire_bubble_shoot.mp3' },
+    { id: 'bs_bubble_switch', name: '구슬 교체', src: 'sfx/bubble_switch.mp3' },
+    { id: 'bs_bubble_hit', name: '구슬 부딪힘', src: 'sfx/bubble_hit.mp3' },
+    { id: 'bs_bubble_pop', name: '구슬 터짐', src: 'sfx/bubble_pop.mp3' },
+    { id: 'bs_add_combo', name: '콤보 추가', src: 'sfx/add_combo.mp3' },
+    { id: 'bs_add_star', name: '별 획득', src: 'sfx/add_star.mp3' },
+    { id: 'bs_add_booster', name: '부스터 획득', src: 'sfx/add_booster.mp3' },
+    { id: 'bs_collect_item', name: '아이템 획득', src: 'sfx/collect_item.mp3' },
+    { id: 'bs_calculate_score', name: '점수 계산', src: 'sfx/calculate_score.mp3' },
+    { id: 'bs_bomb_explode', name: '폭탄 폭발', src: 'sfx/bomb_explode.mp3' },
+    { id: 'bs_wood_explode', name: '나무 벽돌 파괴', src: 'sfx/wood_explode.mp3' },
+    { id: 'bs_wheel_spin', name: '룰렛 회전', src: 'sfx/wheel_spin.mp3' },
+    { id: 'bs_sweep_in', name: '쓸려 들어옴', src: 'sfx/sweep_in.mp3' },
+    { id: 'bs_sweep_out', name: '쓸려 나감', src: 'sfx/sweep_out.mp3' },
+    { id: 'bs_button_click', name: '버튼 클릭', src: 'sfx/button_click.mp3' },
+    { id: 'bs_start_game', name: '게임 시작', src: 'sfx/start_game.mp3' },
+    { id: 'bs_game_complete', name: '게임 클리어', src: 'sfx/game_complete.mp3' },
+    { id: 'bs_player_win', name: '승리', src: 'sfx/player_win.mp3' },
+    { id: 'bs_player_loss', name: '패배', src: 'sfx/player_loss.mp3' }
+  ];
+  function findClip(id) {
+    for (var i = 0; i < SFX_CLIPS.length; i++) if (SFX_CLIPS[i].id === id) return SFX_CLIPS[i];
+    return null;
+  }
+  // 합성 효과음(tone)과 달리 진짜 오디오 파일이라, 재생마다 새 Audio를 만들어서
+  // 겹쳐 눌러도(예: 연속 발사) 앞소리가 끊기지 않고 같이 겹쳐 나게 함.
+  function playClip(clip) {
+    if (muted) return;
+    try { var a = new Audio(clip.src); a.play(); } catch (e) {}
   }
 
   var FX = {
@@ -545,11 +591,16 @@
   window.SFX = {
     attachBgm: attachBgm,
     play: function (name) {
-      var custom = customFxForPage(name) || customFxFor(name);
-      if (custom) { playMelody(custom); return; }
+      var id = customIdForPage(name) || customIdFor(name);
+      if (id) {
+        var clip = findClip(id);
+        if (clip) { playClip(clip); return; }
+        var mel = findMelody(id);
+        if (mel) { playMelody(mel); return; }
+      }
       if (FX[name]) FX[name]();
     },
-    version: 38,
+    version: 40,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -562,6 +613,8 @@
       for (k in FX) if (FX.hasOwnProperty(k)) out.push(k);
       return out;
     },
+    clips: function () { return SFX_CLIPS.slice(); },
+    playClipById: function (id) { var c = findClip(id); if (c) playClip(c); },
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -569,7 +622,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 38, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 40, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

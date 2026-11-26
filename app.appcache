@@ -1,11 +1,31 @@
 CACHE MANIFEST
-# v93 2026-11-26
+# v94 2026-11-26
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=39
+sound.js?v=40
 touchfx.js?v=3
 vfx.js?v=2
+sfx/add_booster.mp3
+sfx/add_combo.mp3
+sfx/add_star.mp3
+sfx/bomb_explode.mp3
+sfx/bubble_hit.mp3
+sfx/bubble_pop.mp3
+sfx/bubble_shoot.mp3
+sfx/bubble_switch.mp3
+sfx/button_click.mp3
+sfx/calculate_score.mp3
+sfx/collect_item.mp3
+sfx/fire_bubble_shoot.mp3
+sfx/game_complete.mp3
+sfx/player_loss.mp3
+sfx/player_win.mp3
+sfx/start_game.mp3
+sfx/sweep_in.mp3
+sfx/sweep_out.mp3
+sfx/wheel_spin.mp3
+sfx/wood_explode.mp3
 tetris.html
 balldraw.html
 bubble.html
