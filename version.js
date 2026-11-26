@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.19';
-window.APP_VERSION_NOTE = '효과음 파일(sfx/*.mp3) 재생 방식을 new Audio().play()에서 미리 디코드해 둔 Web Audio 버퍼 재생으로 바꿔, 터치 후 0.5~1초씩 늦게 나던 지연 문제 해결';
+window.APP_VERSION = '0.4.20';
+window.APP_VERSION_NOTE = '버블 슈터: 발사(휙) 효과음만 녹음 파일 대신 다시 직접 합성한 소리로 되돌림 — 파일 자체의 시작 여유 때문에 입력과 소리 사이 체감 지연이 남아있었음';
 window.APP_VERSION_DATE = '2026-11-26';

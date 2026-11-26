@@ -557,11 +557,12 @@
   // (localStorage 'customFxMapPages-v1')에 이 페이지(bubble.html)만의 매핑을
   // 처음 한 번 써 둔다. 플래그로 한 번만 실행하므로, 사용자가 피아노
   // 페이지에서 나중에 직접 "기본 소리"로 되돌려도 다시 덮어쓰지 않는다.
+  // "발사(shoot/specialshoot)"는 여기 넣지 않음 — 아래 revertShootToSynth 참고.
   (function seedBubbleShooterSfx() {
     var FLAG = 'bubbleSfxSeeded-v1';
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
     var DEFAULTS = {
-      start: 'bs_start_game', shoot: 'bs_bubble_shoot', specialshoot: 'bs_fire_bubble_shoot',
+      start: 'bs_start_game',
       land: 'bs_bubble_hit', pop: 'bs_bubble_pop', tetris: 'bs_add_combo', drop: 'bs_sweep_out',
       unflag: 'bs_bubble_switch', boom: 'bs_bomb_explode', win: 'bs_game_complete',
       over: 'bs_player_loss', click: 'bs_button_click'
@@ -572,6 +573,33 @@
       for (k in DEFAULTS) if (DEFAULTS.hasOwnProperty(k) && !(k in page)) page[k] = DEFAULTS[k];
       pm['bubble.html'] = page;
       localStorage.setItem('customFxMapPages-v1', JSON.stringify(pm));
+    } catch (e) {}
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+  })();
+
+  // ---- "발사" 효과음은 다시 직접 합성한 소리로 되돌림 ----
+  // 실기(갤럭시 S22)로 확인한 피드백: 디코드 지연은 없앴는데도(바로 위
+  // 커밋에서 Web Audio 버퍼로 바꿈) 녹음 파일 자체의 시작 부분에 약간의
+  // 여유/묵음이 있어서, 손을 뗀 순간과 "휙" 소리가 들리는 순간 사이에
+  // 체감되는 지연이 남아 있었음. 발사처럼 입력과 동시에 나야 하는 소리는
+  // 그 자리에서 파형을 만드는 합성음(FX.shoot/specialshoot)이 녹음 파일의
+  // 재생 시작(attack)보다도 더 즉각적이라 이 둘만 다시 합성음으로 되돌림.
+  // 바로 위 seedBubbleShooterSfx()가 이미 이 값을 심어 둔 기존 기기에서도
+  // 적용되도록, 정확히 그 값(bs_bubble_shoot/bs_fire_bubble_shoot)일 때만
+  // 한 번 지워준다(사용자가 피아노 페이지에서 일부러 다른 걸 골랐으면
+  // 안 건드림).
+  (function revertShootToSynth() {
+    var FLAG = 'bubbleShootSynthFix-v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    try {
+      var pm = JSON.parse(localStorage.getItem('customFxMapPages-v1') || '{}');
+      var page = pm['bubble.html'];
+      if (page) {
+        if (page.shoot === 'bs_bubble_shoot') delete page.shoot;
+        if (page.specialshoot === 'bs_fire_bubble_shoot') delete page.specialshoot;
+        pm['bubble.html'] = page;
+        localStorage.setItem('customFxMapPages-v1', JSON.stringify(pm));
+      }
     } catch (e) {}
     try { localStorage.setItem(FLAG, '1'); } catch (e) {}
   })();
