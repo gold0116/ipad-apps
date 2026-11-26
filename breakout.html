@@ -19,7 +19,7 @@
 <div class="top"><a href="index.html">‹ 홈</a> 벽돌깨기</div>
 <div class="wrap">
   <div id="info">점수 <b id="sc">0</b> · 목숨 <b id="lv">3</b> · 단계 <b id="st">1</b> · 최고 <b id="best">0</b></div>
-  <canvas id="cv" width="300" height="400"></canvas>
+  <canvas id="cv" width="300" height="470"></canvas>
   <div id="msg"></div>
   <div class="pad">
     <button class="btn" id="cont">이어하기 (목숨 1)</button>
@@ -32,7 +32,12 @@
 <script src="touchfx.js?v=3"></script>
 <script>
 (function () {
-  var W = 300, H = 400, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  // 받침대 밑에 여유 공간(FOOTER_H)을 둬서, 손가락으로 조작할 때 받침대를 직접
+  // 가리지 않고 그 아래 빈 자리를 짚어서 움직일 수 있게 함(터치는 x좌표만 보고
+  // 반응하므로 y는 어디든 상관없음 — setX 참고). 벽돌/공 영역(PLAY_H)은 그대로
+  // 두고 캔버스만 그만큼 아래로 늘림.
+  var W = 300, PLAY_H = 400, FOOTER_H = 70, H = PLAY_H + FOOTER_H;
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
   var tfx = TouchFX.attach(cv);
   // 디버그용: "터치 효과" 체크박스 옆에 "Auto" 체크박스를 하나 더 붙여서,
   // 켜면 공 받기/아이템 캐치/레이저 발사를 자동으로 해 준다(stepAuto 참고).
@@ -69,9 +74,9 @@
   }
   function $(i) { return document.getElementById(i); }
   function layout() {
-    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 260) * 0.75, 600);
+    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 260) * (W / H), 600);
     if (w < 240) w = 240;
-    cv.style.width = w + 'px'; cv.style.height = (w * 4 / 3) + 'px';
+    cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
   }
   window.addEventListener('resize', layout, false);
   window.addEventListener('orientationchange', layout, false);
@@ -140,7 +145,12 @@
   var HUD_ORDER = ['expand', 'slow', 'catch', 'laser', 'through', 'score2'];
 
   var SK = 'breakoutSave';
-  var bricks, grid, px, pw = 56, BASE_PW = 56, ph = 10, py = H - 24;
+  var bricks, grid, px, pw = 56, BASE_PW = 56, ph = 10, py = PLAY_H - 24;
+  // 원작 아르카노이드처럼 공은 받침대 한가운데가 아니라 살짝 오른쪽에 붙어서
+  // 대기한다 — 그 자리(= 받침대 중심 기준 비율)가 그대로 발사 각도가 되므로,
+  // 발사 전에 받침대를 원하는 자리로 옮기면 공을 그 방향 구석으로 보낼 수 있다
+  // (받침대 가장자리에 맞아 튕길 때 쓰는 것과 같은 off*maxAngle 공식 재사용).
+  var BALL_OFF = 0.42;
   var balls, items, bolts, levelIdx, score, lives, stage, best = 0, state = 'idle', last = 0, lastBoltAt = 0;
   var effects = { expand: 0, slow: 0, catch: 0, laser: 0, through: 0, score2: 0 };
   try { best = parseInt(localStorage.getItem('bestBreakout') || '0', 10) || 0; } catch (e) {}
@@ -355,7 +365,7 @@
     return true;
   }
 
-  function resetBall() { state = 'ready'; balls = [makeBall(px, py - 8, 0, 0)]; }
+  function resetBall() { state = 'ready'; balls = [makeBall(px + BALL_OFF * pw / 2, py - 8, 0, 0)]; }
   function newGame() {
     try { localStorage.removeItem(SK); } catch (e) {}
     $('cont').style.display = 'none';
@@ -438,7 +448,7 @@
   }
 
   function step(dt) {
-    if (state === 'ready') { for (var i = 0; i < balls.length; i++) { balls[i].x = px; balls[i].y = py - 8; } return; }
+    if (state === 'ready') { for (var i = 0; i < balls.length; i++) { balls[i].x = px + BALL_OFF * pw / 2; balls[i].y = py - 8; } return; }
     if (state !== 'play') return;
     tickEffects(dt); stepItems(dt); stepBolts(dt);
     for (var bi = balls.length - 1; bi >= 0; bi--) if (!stepBall(balls[bi], dt)) balls.splice(bi, 1);
@@ -611,7 +621,7 @@
     if (!released) maybeFireLaser();
   }
   function launch() {
-    var sp = 0.19 + stage * 0.015, a = (Math.random() * 0.8 - 0.4);
+    var sp = 0.19 + stage * 0.015, a = BALL_OFF;
     balls[0].vx = Math.sin(a) * sp; balls[0].vy = -Math.cos(a) * sp;
     state = 'play'; $('msg').textContent = '';
   }
