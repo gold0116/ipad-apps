@@ -17,6 +17,7 @@
     if (!AC) return;
     if (!ctx) { try { ctx = new AC(); } catch (e) { return; } }
     preloadClips();
+    wafEnsure();
     try {
       if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
       if (ctx.state !== 'running') {
@@ -341,9 +342,46 @@
       };
     } catch (e) { return { stop: function () {} }; }
   }
+  // ---- "피아노" 악기만 실제 녹음 샘플(WebAudioFont)로 ----
+  // 나머지 19개 악기는 전부 그대로 오실레이터 배음 합성을 쓴다. 피아노 음질을
+  // 올려달라는 요청(261126_WebAudioFont_guide.md)에 따라 피아노 페이지에
+  // (`vendor/webaudiofont/`) 엔진+GM 프로그램 0(Acoustic Grand Piano) 샘플만
+  // 끼워 넣고, 그게 있는 페이지(피아노 페이지뿐)에서만 이 경로를 탄다 — 다른
+  // 게임 페이지는 그 스크립트가 아예 없어서 자동으로 기존 합성음 그대로 들림.
+  // 로딩 전/실패 시에도 기존 오실레이터로 자연스럽게 폴백한다.
+  var waf = { player: null, preset: null, failed: false, started: false };
+  function wafEnsure() {
+    if (waf.player || waf.failed || !ctx) return;
+    if (typeof WebAudioFontPlayer === 'undefined') { waf.failed = true; return; }
+    waf.started = true;
+    try {
+      waf.player = new WebAudioFontPlayer();
+      waf.player.loader.startLoad(ctx, 'vendor/webaudiofont/0000_JCLive_sf2_file.js', '_tone_0000_JCLive_sf2_file');
+      waf.player.loader.waitLoad(function () { waf.preset = window._tone_0000_JCLive_sf2_file || null; });
+    } catch (e) { waf.failed = true; }
+  }
+  function wafReady() { return !!(waf.player && waf.preset); }
   // 건반 하나를 누름 — 악기/더블링/에코 설정에 맞춰 1~2개 화음 그룹을 울리고,
   // 뗄 때 호출할 stop()을 돌려준다(에코가 켜져 있으면 뗄 때 짧은 꼬리를 남김)
   function liveNoteOn(midi, instrumentId, doubling, echoOn) {
+    if ((instrumentId === 'piano' || !instrumentId) && wafReady()) {
+      var env = waf.player.queueWaveTable(ctx, instBus(), waf.preset, ctx.currentTime, midi, 30, 0.55);
+      // 오실레이터 쪽의 "더블링"(살짝 디튠한 음 하나 더)과 같은 느낌을 내려고
+      // pitch를 살짝(12센트) 올린 두 번째 성부를 작은 볼륨으로 같이 켠다.
+      var env2 = doubling ? waf.player.queueWaveTable(ctx, instBus(), waf.preset, ctx.currentTime, midi + 0.12, 30, 0.4) : null;
+      return {
+        stop: function () {
+          if (env && env.cancel) env.cancel();
+          if (env2 && env2.cancel) env2.cancel();
+          // 오실레이터 쪽 playNoteEcho와 같은 모양(점점 작아지며 3번 반복)을
+          // 샘플 재생으로 그대로 흉내냄
+          if (echoOn) {
+            var times = 3, gap = 0.1, decay = 0.5;
+            for (var i = 0; i < times; i++) waf.player.queueWaveTable(ctx, instBus(), waf.preset, ctx.currentTime + i * gap, midi, 0.25, 0.3 * Math.pow(decay, i));
+          }
+        }
+      };
+    }
     var inst = INSTRUMENTS[instrumentId] || INSTRUMENTS.piano;
     var m = midi + (inst.octave || 0) * 12, freq = midiToFreq(m);
     var voice = harmonicChord(freq, inst, 0.16, doubling);
@@ -402,7 +440,26 @@
   }
   function playMelody(obj) {
     if (muted || !ctx || !obj || !obj.notes) return;
-    var inst = INSTRUMENTS[obj.instrument] || INSTRUMENTS.piano, i, note, m, freq;
+    var i, note;
+    // 악기가 "피아노"(기본값 포함)이고 WebAudioFont 샘플이 준비돼 있으면 그걸로
+    // 재생 — 음표마다 시작 시각/길이를 미리 알고 있어서(라이브 연주와 달리
+    // stop()을 따로 받을 필요 없음) queueWaveTable에 바로 예약해 넣으면 됨.
+    if ((obj.instrument === 'piano' || !obj.instrument) && wafReady()) {
+      var t0 = ctx.currentTime;
+      for (i = 0; i < obj.notes.length; i++) {
+        note = obj.notes[i];
+        waf.player.queueWaveTable(ctx, instBus(), waf.preset, t0 + note.t, note.midi, note.dur, 0.5);
+        if (obj.doubling) waf.player.queueWaveTable(ctx, instBus(), waf.preset, t0 + note.t, note.midi + 0.12, note.dur, 0.35);
+        if (obj.echo) {
+          var times = 3, gap = 0.09, decay = 0.55;
+          for (var k = 1; k < times; k++) {
+            waf.player.queueWaveTable(ctx, instBus(), waf.preset, t0 + note.t + k * gap, note.midi, Math.max(0.05, note.dur - k * gap), 0.22 * Math.pow(decay, k));
+          }
+        }
+      }
+      return;
+    }
+    var inst = INSTRUMENTS[obj.instrument] || INSTRUMENTS.piano, m, freq;
     for (i = 0; i < obj.notes.length; i++) {
       note = obj.notes[i]; m = note.midi + (inst.octave || 0) * 12; freq = midiToFreq(m);
       playVoices(freq, note.dur, inst, note.t, obj.doubling, obj.echo);
@@ -641,7 +698,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 42,
+    version: 43,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -656,6 +713,13 @@
     },
     clips: function () { return SFX_CLIPS.slice(); },
     playClipById: function (id) { var c = findClip(id); if (c) playClip(c); },
+    // 피아노 페이지가 "피아노 음색 불러오는 중" 표시를 하려고 씀 — 그 페이지에만
+    // vendor/webaudiofont/ 스크립트가 있어서, 다른 페이지에선 항상 'unavailable'
+    pianoSampleStatus: function () {
+      if (waf.failed) return 'unavailable';
+      if (wafReady()) return 'ready';
+      return waf.started ? 'loading' : 'idle';
+    },
     loadSong: loadSong,
     defineSong: defineSong,
     setSong: setSong,
@@ -663,7 +727,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 42, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 43, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

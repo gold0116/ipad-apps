@@ -47,6 +47,7 @@
   <div class="card">
     <div class="row">
       악기 <select id="instr"></select>
+      <span id="pianoLoadStatus" style="font-size:13px;color:#888;margin-left:6px"></span>
     </div>
     <div class="row">
       <label><input type="checkbox" id="doubling"> 더블링</label>
@@ -102,7 +103,8 @@
 
   <p style="font-size:13px;color:#888;margin-top:16px">멜로디는 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요).</p>
 </div>
-<script src="sound.js?v=42"></script>
+<script src="sound.js?v=43"></script>
+<script src="vendor/webaudiofont/WebAudioFontPlayer.js?v=1"></script>
 <script>
 (function () {
   var LIST_KEY = 'piano-list-v1', FXMAP_KEY = 'customFxMap-v1', FXMAP_PAGES_KEY = 'customFxMapPages-v1';
@@ -368,6 +370,19 @@
   })();
   $('doubling').onchange = function () { doubling = this.checked; };
   $('echoCk').onchange = function () { echoOn = this.checked; };
+
+  // ---- "피아노" 악기만 실제 샘플(WebAudioFont)로 바뀌는 동안 로딩 상태 표시 ----
+  // 처음 터치(건반이든 뭐든)해야 오디오 잠금이 풀리면서 로딩이 시작되므로,
+  // 그 전까지는 "곧 더 좋은 피아노 음색으로 바뀝니다" 안내만 보여준다.
+  (function watchPianoLoad() {
+    var el = $('pianoLoadStatus');
+    var timer = setInterval(function () {
+      var s = SFX.pianoSampleStatus();
+      if (s === 'ready' || s === 'unavailable') { el.textContent = ''; clearInterval(timer); }
+      else if (s === 'loading') { el.textContent = '피아노 음색 불러오는 중…'; }
+      else { el.textContent = '건반을 한 번 누르면 더 좋은 피아노 음색을 불러와요'; }
+    }, 400);
+  })();
 
   // ---- 저장된 멜로디 목록 ----
   function render() {

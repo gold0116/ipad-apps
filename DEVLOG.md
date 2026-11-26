@@ -3,6 +3,53 @@
 > 다음 세션 시작할 때 이 문서부터 읽으면 맥락 복구에 도움 됩니다.
 > 지켜야 할 "규칙"은 여기가 아니라 `CLAUDE.md`에 있습니다.
 
+## 2026-11-26 세션 요약 (피아노: "피아노" 악기를 WebAudioFont 실제 샘플로)
+
+사용자: "261126_WebAudioFont_guide.md 문서 참고해줘. 피아노 음질 개선 가능할
+것 같아서.." — 사용자가 직접 GitHub에 커밋해 둔 이식 가이드 문서(처음엔
+세션에 없어서 못 찾았는데, `git fetch`로 받아옴)를 그대로 따름: 피아노
+페이지의 UI/멀티터치는 그대로 두고, 지금까지 전부 오실레이터 배음 합성
+이던 음원 생성부 중 **"피아노" 악기 하나만** 실제 녹음 샘플(WebAudioFont)로
+교체. 나머지 19개 악기, 그리고 피아노 페이지가 아닌 다른 게임들의 효과음은
+전혀 안 건드림.
+
+- 엔진(`surikov/webaudiofont`, GPL-3.0)과 음원(`surikov/webaudiofontdata`)
+  저장소를 직접 클론/검증: 가이드가 추측해 둔 파일명(`0000_Aspirin_sf2_file.js`)
+  대신, **엔진 자신의 `WebAudioFontLoader.prototype.findInstrument(0)`이
+  실제로 고르는 파일**을 Playwright로 엔진을 띄워 직접 확인해서 씀 —
+  GM 프로그램 0(Acoustic Grand Piano) → `0000_JCLive_sf2_file.js`
+  (`_tone_0000_JCLive_sf2_file`, 20개 구간 멀티샘플, 우리 6옥타브 건반
+  범위(MIDI 24~95)를 빈틈없이 덮음, 디코드 전 약 861KB). 공식 데모
+  (`examples/piano.html`)가 쓰는 `0090_JCLive`는 사실 GM 번호로 "글로켄
+  슈필"이라 혼동하지 않도록 주의.
+- `vendor/webaudiofont/`에 엔진(`WebAudioFontPlayer.js`, 124KB, 수정 없이
+  그대로)과 피아노 샘플 하나만 자체 호스팅(가이드의 "외부 CDN 의존 없이"
+  권고 그대로, 오프라인 앱캐시 등록도 필요해서 자체 호스팅이 어차피 필수).
+  출처/라이선스는 `vendor/webaudiofont/NOTICE.md`에 적어둠.
+- `sound.js`에 `wafEnsure()`(처음 터치 시 엔진 생성 + 피아노 샘플
+  `startLoad`)를 추가하고, `liveNoteOn()`(건반 연주)과 `playMelody()`(저장된
+  멜로디 재생/효과음 교체)에서 **악기가 "피아노"이고 샘플이 준비됐을 때만**
+  `queueWaveTable()`로 분기 — 그 외(다른 18개 악기, 또는 샘플이 아직 로딩
+  전/실패)는 기존 오실레이터 경로 그대로. "더블링"은 12센트 올린 성부를
+  하나 더 겹치는 것으로, "에코"는 점점 작아지며 3번 반복하는 것으로
+  기존 오실레이터 쪽과 같은 느낌을 흉내냄. `vendor/` 스크립트가 없는 다른
+  게임 페이지에서는 `typeof WebAudioFontPlayer === 'undefined'`로 자동
+  감지해 항상 기존 합성음 그대로(영향 없음).
+- 피아노 페이지에 "피아노 음색 불러오는 중…" 로딩 표시 추가(가이드의
+  "로딩 상태 표시" 요구사항).
+- 검증: 로컬 HTTP 서버(파일 프로토콜 CORS 제약 피하려고)로 Playwright
+  재현 — 처음엔 `idle`, 터치 한 번 후 `loading`→`ready`로 바뀌는 것, 그
+  상태에서 건반을 누르면 `AudioContext.createOscillator`가 아니라
+  `WebAudioFontPlayer.prototype.queueWaveTable`이 불리는 것, 저장된 멜로디
+  (피아노 악기, 더블링 켜짐)를 재생해도 같은 경로를 타는 것, 악기를
+  "벨"로 바꾸면 그 상태에서도 오실레이터 경로로 돌아가는 것(회귀 없음),
+  `vendor/` 스크립트가 없는 `snake.html`에서는 상태가 `unavailable`로
+  뜨고 기존 효과음이 에러 없이 그대로 재생되는 것까지 전부 확인.
+- sound.js 공용 모듈 변경이라 버전 43으로 올리고 모든 html의 `sound.js?v=`
+  쿼리 일괄 반영. app.appcache에 `vendor/webaudiofont/` 파일 2개 추가,
+  v97→v98. version.js 0.4.20→0.4.21. **iPad 2 실기 미확인**(이번엔 실제
+  음질이 좋아졌다고 느끼는지가 핵심 — 확인 전까지 "일단 돌아간다" 수준).
+
 ## 2026-11-26 세션 요약 (버블 슈터: 발사 효과음만 다시 합성음으로)
 
 사용자: "버블 슈터 폰에서 확인했어. 잘돼. 다만 터치 후 버블 날아갈때의 휙

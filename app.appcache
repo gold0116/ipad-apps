@@ -1,11 +1,13 @@
 CACHE MANIFEST
-# v97 2026-11-26
+# v98 2026-11-26
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=42
+sound.js?v=43
 touchfx.js?v=3
 vfx.js?v=2
+vendor/webaudiofont/WebAudioFontPlayer.js?v=1
+vendor/webaudiofont/0000_JCLive_sf2_file.js
 sfx/add_booster.mp3
 sfx/add_combo.mp3
 sfx/add_star.mp3
