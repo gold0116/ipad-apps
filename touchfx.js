@@ -1,5 +1,5 @@
 // 터치 피드백 효과 (모든 터치 게임 공용)
-// 사용법: <script src="touchfx.js?v=2"></script> 후
+// 사용법: <script src="touchfx.js?v=3"></script> 후
 //   var tfx = TouchFX.attach(document.getElementById('cv'));
 //   그리고 게임 자신의 그리기 함수 맨 끝에서 매 프레임: tfx.draw(ctx);
 // 대상의 기존 touchstart/move/end 리스너는 건드리지 않고 하나 더 붙을 뿐이며,
@@ -66,23 +66,37 @@
     return { draw: draw };
   }
 
+  // "터치 효과"/"배경음"/게임별 디버그 토글(예: 벽돌깨기의 Auto)이 각자 따로
+  // 전체 폭 줄을 차지하면 세로 공간을 너무 많이 먹어서(특히 iPad 2 세로모드),
+  // 캔버스 아래 "레벨/새 게임" 같은 컨트롤이 화면 밖으로 밀려 스크롤해야
+  // 보이는 문제가 있었음 — 그래서 한 줄(#ctrlbar)에 같이 모아 담는다.
+  // sound.js의 attachBgm()도 같은 #ctrlbar를 찾아 재사용함(없으면 만듦).
+  function getBar() {
+    var bar = document.getElementById('ctrlbar');
+    if (bar) return bar;
+    var top = document.querySelector('.top');
+    if (!top) return null;
+    bar = document.createElement('div');
+    bar.id = 'ctrlbar';
+    bar.style.cssText = 'background:#e9eef9;padding:6px 12px;font-size:14px;color:#334;line-height:30px;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-flex-wrap:wrap;flex-wrap:wrap';
+    top.parentNode.insertBefore(bar, top.nextSibling);
+    return bar;
+  }
+
   var toggleDone = false;
   function addToggle() {
     if (toggleDone) return;
     toggleDone = true;
-    var top = document.querySelector('.top');
-    if (!top || document.getElementById('touchfxbar')) return;
-    var bar = document.createElement('div');
-    bar.id = 'touchfxbar';
-    bar.style.cssText = 'background:#e9eef9;padding:6px 12px;font-size:14px;color:#334;line-height:30px';
+    var bar = getBar();
+    if (!bar) return;
     var lab = document.createElement('label');
+    lab.style.marginRight = '14px';
     var cb = document.createElement('input');
     cb.type = 'checkbox'; cb.checked = enabled;
     cb.onchange = function () { setEnabled(cb.checked); };
     lab.appendChild(cb);
     lab.appendChild(document.createTextNode(' 터치 효과'));
     bar.appendChild(lab);
-    top.parentNode.insertBefore(bar, top.nextSibling);
   }
   function setEnabled(v) {
     enabled = !!v;

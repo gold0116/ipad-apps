@@ -1,10 +1,10 @@
 CACHE MANIFEST
-# v91 2026-11-25
+# v92 2026-11-26
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=33
-touchfx.js?v=2
+sound.js?v=39
+touchfx.js?v=3
 vfx.js?v=2
 tetris.html
 balldraw.html

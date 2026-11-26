@@ -486,15 +486,27 @@
   function attachBgm(defaultId) {
     defaultId = defaultId || 'off';
     var top = document.querySelector('.top');
-    if (!top || document.getElementById('bgmbar')) return;
+    if (!top) return;
+    // "터치 효과"(touchfx.js)와 같은 한 줄(#ctrlbar)을 공유해서 세로 공간을
+    // 아낀다 — touchfx.js가 먼저 그 줄을 만들어 뒀으면 재사용하고, 없으면
+    // 이 쪽에서 만든다. data-bgm 플래그로 중복 추가만 막음(bar 자체는 공용).
+    var bar = document.getElementById('ctrlbar');
+    if (bar) { if (bar.getAttribute('data-bgm')) return; }
+    else {
+      bar = document.createElement('div'); bar.id = 'ctrlbar';
+      bar.style.cssText = 'background:#e9eef9;padding:6px 12px;font-size:14px;color:#334;line-height:30px;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-flex-wrap:wrap;flex-wrap:wrap';
+      top.parentNode.insertBefore(bar, top.nextSibling);
+    }
+    bar.setAttribute('data-bgm', '1');
     var page = location.pathname.split('/').pop() || 'index.html';
     var KEY = 'bgm:' + page;
-    var bar = document.createElement('div'); bar.id = 'bgmbar';
-    bar.style.cssText = 'background:#e9eef9;padding:6px 12px;font-size:14px;color:#334;line-height:30px';
     var lab = document.createElement('span'); lab.textContent = '배경음 ';
-    var sel = document.createElement('select'); sel.style.cssText = 'font-size:14px;padding:4px;max-width:72%';
-    bar.appendChild(lab); bar.appendChild(sel);
-    top.parentNode.insertBefore(bar, top.nextSibling);
+    var sel = document.createElement('select'); sel.style.cssText = 'font-size:14px;padding:4px;max-width:72%;margin-right:14px';
+    // 배경음 컨트롤은 항상 맨 앞(왼쪽)에 둔다 — "터치 효과"/Auto는 보통 이
+    // 함수보다 먼저 실행돼서 이미 bar에 들어가 있으므로, 뒤에서 unshift하듯
+    // 맨 앞에 끼워 넣어야 "배경음 우측에 나머지 컨트롤"이라는 순서가 됨.
+    bar.insertBefore(sel, bar.firstChild);
+    bar.insertBefore(lab, sel);
     function add(id, label) { var o = document.createElement('option'); o.value = id; o.textContent = label; sel.appendChild(o); }
     add('off', '끄기'); add('a', '코로베이니키 (러시아 민요)');
     try {

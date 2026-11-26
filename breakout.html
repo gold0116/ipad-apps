@@ -28,8 +28,8 @@
   </div>
   <p style="text-align:center;color:#888">좌우로 문질러 받침대 이동 · 터치하면 발사 / 레이저 발사 / 붙은 공 놓기</p>
 </div>
-<script src="sound.js?v=38"></script>
-<script src="touchfx.js?v=2"></script>
+<script src="sound.js?v=39"></script>
+<script src="touchfx.js?v=3"></script>
 <script>
 (function () {
   var W = 300, H = 400, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -38,7 +38,7 @@
   // 켜면 공 받기/아이템 캐치/레이저 발사를 자동으로 해 준다(stepAuto 참고).
   var autoPlay = false;
   (function () {
-    var bar = document.getElementById('touchfxbar');
+    var bar = document.getElementById('ctrlbar');
     if (!bar) return;
     var lab = document.createElement('label'); lab.style.marginLeft = '14px';
     var cb = document.createElement('input'); cb.type = 'checkbox';

@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.14';
-window.APP_VERSION_NOTE = '버블 슈터: 절차적 모양 대신 panthitech/BubbleShooter의 실제 레벨 8개를 가져와 씀';
-window.APP_VERSION_DATE = '2026-11-25';
+window.APP_VERSION = '0.4.15';
+window.APP_VERSION_NOTE = '벽돌깨기/스네이크/버블 슈터: "터치 효과"/배경음/Auto 컨트롤이 각자 줄을 차지해서 캔버스 아래 레벨/새 게임 버튼이 화면 밖으로 밀리던 문제 — 한 줄로 합침';
+window.APP_VERSION_DATE = '2026-11-26';
