@@ -16,6 +16,7 @@
   function unlock() {
     if (!AC) return;
     if (!ctx) { try { ctx = new AC(); } catch (e) { return; } }
+    preloadClips();
     try {
       if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
       if (ctx.state !== 'running') {
@@ -476,10 +477,44 @@
     for (var i = 0; i < SFX_CLIPS.length; i++) if (SFX_CLIPS[i].id === id) return SFX_CLIPS[i];
     return null;
   }
-  // 합성 효과음(tone)과 달리 진짜 오디오 파일이라, 재생마다 새 Audio를 만들어서
-  // 겹쳐 눌러도(예: 연속 발사) 앞소리가 끊기지 않고 같이 겹쳐 나게 함.
+  // 매번 new Audio(src).play()로 재생했더니(최신 갤럭시 S22에서도) 터치하고
+  // 0.5~1초 뒤에야 소리가 나는 문제가 있었음 — HTMLMediaElement는 재생을
+  // 시작할 때마다 네트워크/디코드 과정을 거치는데, 이게 효과음 같은 "눌렀을
+  // 때 바로" 나와야 하는 용도엔 너무 느림. 그래서 이미 합성 효과음(tone)에
+  // 쓰고 있는 것과 같은 AudioContext로, 파일을 한 번만 미리 받아서 디코드해
+  // 둔 뒤(PCM 버퍼) 재생 시점엔 그 버퍼를 트는 것(BufferSource)만 하도록
+  // 바꿈 — 합성음과 레이턴시가 사실상 같아짐.
+  var clipBuffers = {}, clipsLoading = false;
+  function preloadClips() {
+    if (clipsLoading || !ctx) return;
+    clipsLoading = true;
+    for (var i = 0; i < SFX_CLIPS.length; i++) (function (clip) {
+      try {
+        var x = new XMLHttpRequest();
+        x.open('GET', clip.src, true);
+        x.responseType = 'arraybuffer';
+        x.onload = function () {
+          if (!ctx || x.status && x.status !== 200 && x.status !== 0) return;
+          try {
+            ctx.decodeAudioData(x.response, function (buf) { clipBuffers[clip.id] = buf; }, function () {});
+          } catch (e) {}
+        };
+        x.send();
+      } catch (e) {}
+    })(SFX_CLIPS[i]);
+  }
   function playClip(clip) {
     if (muted) return;
+    var buf = clipBuffers[clip.id];
+    if (buf && ctx) {
+      try {
+        var src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination);
+        if (src.start) src.start(0); else src.noteOn(0);
+        return;
+      } catch (e) {}
+    }
+    // 아직 디코드가 안 끝났으면(맨 처음 터치 직후 등 드문 경우) 예전 방식으로라도 재생
     try { var a = new Audio(clip.src); a.play(); } catch (e) {}
   }
 
@@ -606,7 +641,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 41,
+    version: 42,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -628,7 +663,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 41, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 42, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

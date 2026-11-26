@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.18';
-window.APP_VERSION_NOTE = '버블 슈터: 효과음을 panthitech/BubbleShooter의 실제 효과음으로 교체(발사/터짐/폭발/승리/패배 등) + 그동안 무음이던 "안 터지고 붙을 때"/"특수 구슬 발사"/"새 게임 버튼"에도 효과음 추가';
+window.APP_VERSION = '0.4.19';
+window.APP_VERSION_NOTE = '효과음 파일(sfx/*.mp3) 재생 방식을 new Audio().play()에서 미리 디코드해 둔 Web Audio 버퍼 재생으로 바꿔, 터치 후 0.5~1초씩 늦게 나던 지연 문제 해결';
 window.APP_VERSION_DATE = '2026-11-26';
