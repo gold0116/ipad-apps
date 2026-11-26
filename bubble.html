@@ -23,7 +23,7 @@
   <div class="pad"><button class="btn gray" id="go">새 게임</button></div>
   <p style="text-align:center;color:#888">끌어서 조준하고 손을 떼면 발사 · 같은 색 3개 이상 모으면 터져요<br>자물쇠 구슬은 주변을 터뜨려야 풀리고, 돌 구슬은 색으로 못 맞혀요 · 가끔 폭탄·무지개 구슬이 나와요</p>
 </div>
-<script src="sound.js?v=40"></script>
+<script src="sound.js?v=41"></script>
 <script src="touchfx.js?v=3"></script>
 <script>
 (function () {
@@ -350,6 +350,7 @@
       } else {
         board[r][c] = { kind: 'rainbow' };
       }
+      SFX.play('land');
       checkWinOrFail();
       return;
     }
@@ -362,6 +363,8 @@
       applyLockedDamage(lockedCoords2);
       SFX.play('pop');
       checkFloatingAndDrop();
+    } else {
+      SFX.play('land');
     }
     checkWinOrFail();
   }
@@ -396,7 +399,7 @@
     var speed = 7;
     flying = { x: SHOOT_X, y: SHOOT_Y, vx: dx / len * speed, vy: dy / len * speed, kind: cur.kind, c: cur.c };
     shotsLeft--; updateInfo();
-    SFX.play('shoot');
+    SFX.play(cur.kind === 'color' ? 'shoot' : 'specialshoot');
   }
 
   function updateFlying() {
@@ -544,7 +547,35 @@
   cv.addEventListener('mouseup', function (e) { fire(); aim.active = false; }, false);
   document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
 
-  $('go').onclick = newGame;
+  $('go').onclick = function () { SFX.play('click'); newGame(); };
+
+  // ---- panthitech/BubbleShooter의 실제 효과음을 이 게임의 기본값으로 한 번만
+  // 깔아둔다 ----
+  // 합성 효과음 이름(start/shoot/pop/...)은 다른 게임과 공유라 FX 자체의
+  // "기본값"을 여기서 바꿀 순 없고(그러면 두더지 잡기의 'pop' 같은 것도 같이
+  // 바뀜), 대신 피아노 페이지의 "게임별 효과음 교체"와 같은 저장소
+  // (localStorage 'customFxMapPages-v1')에 이 페이지(bubble.html)만의 매핑을
+  // 처음 한 번 써 둔다. 플래그로 한 번만 실행하므로, 사용자가 피아노
+  // 페이지에서 나중에 직접 "기본 소리"로 되돌려도 다시 덮어쓰지 않는다.
+  (function seedBubbleShooterSfx() {
+    var FLAG = 'bubbleSfxSeeded-v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    var DEFAULTS = {
+      start: 'bs_start_game', shoot: 'bs_bubble_shoot', specialshoot: 'bs_fire_bubble_shoot',
+      land: 'bs_bubble_hit', pop: 'bs_bubble_pop', tetris: 'bs_add_combo', drop: 'bs_sweep_out',
+      unflag: 'bs_bubble_switch', boom: 'bs_bomb_explode', win: 'bs_game_complete',
+      over: 'bs_player_loss', click: 'bs_button_click'
+    };
+    try {
+      var pm = JSON.parse(localStorage.getItem('customFxMapPages-v1') || '{}');
+      var page = pm['bubble.html'] || {}, k;
+      for (k in DEFAULTS) if (DEFAULTS.hasOwnProperty(k) && !(k in page)) page[k] = DEFAULTS[k];
+      pm['bubble.html'] = page;
+      localStorage.setItem('customFxMapPages-v1', JSON.stringify(pm));
+    } catch (e) {}
+    try { localStorage.setItem(FLAG, '1'); } catch (e) {}
+  })();
+
   board = [];
   updateInfo();
   last = Date.now(); frame();

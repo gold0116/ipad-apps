@@ -519,7 +519,13 @@
     // 두더지가 쏙 올라옴 / 맞았을 때 통쾌한 "뽕"
     pop:    function () { tone(320, 0.06, 'sine', 0.07, 0, 520); },
     bonk:   function () { tone(110, 0.1, 'square', 0.18, 0, 55); tone(1500, 0.025, 'square', 0.08, 0); echo(700, 0.05, 'triangle', 0.05, 0.03, 2, 0.06, 0.5); },
-    tick:   function () { tone(1200, 0.02, 'square', 0.04, 0); }
+    tick:   function () { tone(1200, 0.02, 'square', 0.04, 0); },
+    // 버블 슈터: 날아간 구슬이 아무것도 안 터뜨리고 그냥 붙을 때의 "톡"(이전엔 무음이었음)
+    land:   function () { tone(260, 0.05, 'sine', 0.07, 0, 180); },
+    // 버블 슈터: 폭탄/무지개 같은 특수 구슬을 쏠 때(보통 구슬 'shoot'보다 더 묵직하게)
+    specialshoot: function () { tone(260, 0.12, 'sawtooth', 0.1, 0, 700); tone(520, 0.08, 'square', 0.08, 0.06, 900); },
+    // 공용 버튼 클릭(짧고 가벼운 "딱")
+    click:  function () { tone(1400, 0.03, 'square', 0.06, 0); }
   };
 
   // 게임 화면 위쪽에 "배경음" 선택 칸을 붙인다. 게임마다 선택을 기억하고,
@@ -600,7 +606,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 40,
+    version: 41,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -622,7 +628,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 40, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 41, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
