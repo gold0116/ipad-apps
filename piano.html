@@ -42,12 +42,12 @@
 <body>
 <div class="top"><a href="index.html">‹ 홈</a> 피아노</div>
 <div class="wrap">
-  <p style="color:#666;font-size:14px;line-height:1.5">건반을 양옆으로 밀거나 두 손가락으로 확대/축소해서 연주하세요. "녹음 시작"으로 멜로디를 저장하면 아래 "효과음 교체"에서 다른 게임의 효과음으로 쓸 수 있어요.</p>
+  <p style="color:#666;font-size:14px;line-height:1.5">건반을 양옆으로 밀거나 두 손가락으로 확대/축소해서 연주하세요. "녹음 시작"으로 멜로디를 저장하면 아래 "효과음 교체"에서 다른 게임의 효과음으로 쓸 수 있어요. "(고음질)"이 붙은 악기는 실제 녹음한 소리예요.</p>
 
   <div class="card">
     <div class="row">
       악기 <select id="instr"></select>
-      <span id="pianoLoadStatus" style="font-size:13px;color:#888;margin-left:6px"></span>
+      <span id="instrLoadStatus" style="font-size:13px;color:#888;margin-left:6px"></span>
     </div>
     <div class="row">
       <label><input type="checkbox" id="doubling"> 더블링</label>
@@ -103,7 +103,7 @@
 
   <p style="font-size:13px;color:#888;margin-top:16px">멜로디는 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요).</p>
 </div>
-<script src="sound.js?v=44"></script>
+<script src="sound.js?v=45"></script>
 <script src="vendor/webaudiofont/WebAudioFontPlayer.js?v=1"></script>
 <script>
 (function () {
@@ -372,22 +372,27 @@
   // ---- 설정 ----
   (function initInstr() {
     var sel = $('instr'), ins = SFX.instruments(), i, o;
-    for (i = 0; i < ins.length; i++) { o = document.createElement('option'); o.value = ins[i].id; o.textContent = ins[i].label; sel.appendChild(o); }
-    sel.onchange = function () { instrument = sel.value; };
+    for (i = 0; i < ins.length; i++) {
+      o = document.createElement('option'); o.value = ins[i].id;
+      o.textContent = ins[i].label + (ins[i].hq ? ' (고음질)' : '');
+      sel.appendChild(o);
+    }
+    sel.onchange = function () { instrument = sel.value; SFX.ensureInstrumentSample(instrument); };
   })();
   $('doubling').onchange = function () { doubling = this.checked; };
   $('echoCk').onchange = function () { echoOn = this.checked; };
 
-  // ---- "피아노" 악기만 실제 샘플(WebAudioFont)로 바뀌는 동안 로딩 상태 표시 ----
+  // ---- "(고음질)" 악기가 실제 샘플(WebAudioFont)로 바뀌는 동안 로딩 상태 표시 ----
   // 처음 터치(건반이든 뭐든)해야 오디오 잠금이 풀리면서 로딩이 시작되므로,
-  // 그 전까지는 "곧 더 좋은 피아노 음색으로 바뀝니다" 안내만 보여준다.
-  (function watchPianoLoad() {
-    var el = $('pianoLoadStatus');
-    var timer = setInterval(function () {
-      var s = SFX.pianoSampleStatus();
-      if (s === 'ready' || s === 'unavailable') { el.textContent = ''; clearInterval(timer); }
-      else if (s === 'loading') { el.textContent = '피아노 음색 불러오는 중…'; }
-      else { el.textContent = '건반을 한 번 누르면 더 좋은 피아노 음색을 불러와요'; }
+  // 그 전까지는 안내만 보여준다. 지금 고른 악기 기준으로 매번 다시 계산하므로
+  // 악기를 바꾸면 그 악기 상태로 바로 바뀜.
+  (function watchInstrumentLoad() {
+    var el = $('instrLoadStatus');
+    setInterval(function () {
+      var s = SFX.instrumentSampleStatus(instrument);
+      if (s === 'na' || s === 'ready' || s === 'unavailable') { el.textContent = ''; }
+      else if (s === 'loading') { el.textContent = '고음질 음색 불러오는 중…'; }
+      else { el.textContent = '건반을 한 번 누르면 고음질 음색을 불러와요'; }
     }, 400);
   })();
 

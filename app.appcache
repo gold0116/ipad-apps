@@ -1,13 +1,21 @@
 CACHE MANIFEST
-# v99 2026-11-26
+# v100 2026-11-26
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=44
+sound.js?v=45
 touchfx.js?v=3
 vfx.js?v=2
 vendor/webaudiofont/WebAudioFontPlayer.js?v=1
 vendor/webaudiofont/0000_JCLive_sf2_file.js
+vendor/webaudiofont/0040_Aspirin_sf2_file.js
+vendor/webaudiofont/0100_Aspirin_sf2_file.js
+vendor/webaudiofont/0130_Aspirin_sf2_file.js
+vendor/webaudiofont/0240_Aspirin_sf2_file.js
+vendor/webaudiofont/0270_Aspirin_sf2_file.js
+vendor/webaudiofont/0400_Aspirin_sf2_file.js
+vendor/webaudiofont/0560_Aspirin_sf2_file.js
+vendor/webaudiofont/0730_Aspirin_sf2_file.js
 sfx/add_booster.mp3
 sfx/add_combo.mp3
 sfx/add_star.mp3
