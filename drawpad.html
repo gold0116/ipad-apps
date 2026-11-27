@@ -257,7 +257,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   // 조각을 아예 안 만들어서 메모리 사용량이 "지금 그려진 캔버스 하나"로
   // 고정되고(획이 몇 개든 늘지 않음), 그 대신 되돌릴 때마다 지금까지 그린
   // 걸 다시 그리는 약간의 시간이 듦(짧게 디바운스해서 연달아 눌러도 한 번만).
-  var ops = [], redo = [];
+  var ops = [], redo = [], hasClearOp = false;
   var tool = { pen: 'pen', color: '#000000', size: 6, alpha: 1, fs: 1 };
   var FILLS = [{ tl: 18, dl: 0 }, { tl: 40, dl: 120 }, { tl: 80, dl: 230 }];
   var hand = false;
@@ -273,8 +273,21 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   var IDXK = '_drawIdx';
   function loadIdx() { try { return JSON.parse(localStorage.getItem(IDXK) || '[]') || []; } catch (e) { return []; } }
   function saveIdx(a) { try { localStorage.setItem(IDXK, JSON.stringify(a)); return true; } catch (e) { return false; } }
-  var saveTimer = 0, dirtySave = false;
-  function markSave() { dirtySave = true; $('sv').textContent = '저장중'; clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1800); }
+  var saveTimer = 0, dirtySave = false, lastRealSave = 0;
+  // 획을 그릴 때마다(1.8초 쉬면) 매번 도화지 전체(doc.ops 전부)와 작품
+  // 목록 인덱스(다른 그림들 썸네일 포함)를 통째로 JSON으로 다시 만드는데,
+  // 그림이 쌓일수록 이 작업량도 같이 늘어남 — 빗금처럼 짧은 획을 쉬어가며
+  // 계속 그릴 때 매번 반복되면 누적 부담이 커짐(실기에서 "선을 얼마 이상
+  // 그리면 죽어버린다"는 증상과 일치). 실제 저장(localStorage 쓰기)은
+  // 최근 저장 후 일정 시간(MIN_SAVE_GAP)이 지났을 때만 하도록 늦춰서
+  // 반복 빈도를 줄인다 — 자동 저장만 늦추는 것이고, 화면 나가기/내보내기
+  // 때는 그대로 즉시 저장(saveNow 직접 호출)되니 데이터가 누락되지 않음.
+  var MIN_SAVE_GAP = 8000;
+  function markSave() {
+    dirtySave = true; $('sv').textContent = '저장중'; clearTimeout(saveTimer);
+    var wait = Math.max(1800, MIN_SAVE_GAP - (+new Date() - lastRealSave));
+    saveTimer = setTimeout(saveNow, wait);
+  }
   var thumbCv = null;
   function thumbOf() {
     var tw = 160, th = Math.max(20, Math.round(160 * H / W));
@@ -297,7 +310,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
       if (!found) idx.push({ id: doc.id, w: W, h: H, paper: doc.paper, upd: doc.upd, thumb: thumbOf(), n: ops.length });
       okk = saveIdx(idx);
     }
-    if (okk) { dirtySave = false; $('sv').textContent = '저장됨'; }
+    if (okk) { dirtySave = false; lastRealSave = +new Date(); $('sv').textContent = '저장됨'; }
     else { $('sv').textContent = '저장 실패!'; hud('저장 공간이 부족해요. 작품 목록에서 안 쓰는 그림을 지워 주세요.', 5000); }
   }
   window.addEventListener('pagehide', saveNow, false);
@@ -396,10 +409,20 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     for (var i = 0; i < ops.length; i++) applyOp(dctx, ops[i], doc.paper, W, H);
   }
   // 전체 지움 이후에는 그 이전 기록이 필요 없다(빈 종이에서 다시 시작) → 다음 획을 확정할 때 이전 기록을 버려 저장 크기를 줄인다
+  // "전체 지우기"를 한 번도 안 썼으면(대부분의 경우) 이 함수는 할 일이
+  // 없는데도, 예전 코드는 그걸 확인하려고 매번 ops 전체를 끝에서부터
+  // 훑었음 — 획을 확정(commitOp)할 때마다 호출되니, 획이 쌓일수록(길게
+  // 이어 그리든 짧게 여러 번 나눠 그리든 상관없이, 총 획 수에 비례해서)
+  // 매번 더 오래 훑어야 해서 전체 비용이 제곱으로 늘어남(실기에서 "선을
+  // 얼마 이상 그리면 죽어버린다"는 증상과 정확히 일치하는 패턴). 지우기를
+  // 쓸 때만 true가 되는 hasClearOp 플래그로 그 경우엔 훑지 않고 바로
+  // 돌아가게 함.
   function trimAfterClear() {
+    if (!hasClearOp) return;
     var ci = -1, i;
     for (i = ops.length - 1; i >= 0; i--) if (ops[i].k === 'c') { ci = i; break; }
     if (ci < 0) return;
+    hasClearOp = false;
     var tc = ops[ci].t || 0;
     ops.splice(0, ci + 1);
     var keep = [], before = null, v;
@@ -430,7 +453,8 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     flushRebuild();
     var op = redo.pop();
     applyOp(dctx, op, doc.paper, W, H);
-    finalizeOp(op); markFull(); markSave(); updBtns();
+    finalizeOp(op); if (op.k === 'c') hasClearOp = true;
+    markFull(); markSave(); updBtns();
   }
   function updBtns() {
     $('bUndo').className = 'b' + (ops.length ? '' : ' off');
@@ -671,7 +695,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     clearTimeout(rebuildT); rebuildT = 0;
     doc = d; W = d.W; H = d.H;
     docCv = document.createElement('canvas'); docCv.width = W; docCv.height = H; dctx = docCv.getContext('2d');
-    ops = []; redo = []; mode = 'none'; pend = null; st = null; curOp = null;
+    ops = []; redo = []; hasClearOp = false; mode = 'none'; pend = null; st = null; curOp = null;
     layout();
     var z = fitZ(); view.z = z; view.a = 0; view.ox = (vw - W * z) / 2; view.oy = (vh - H * z) / 2;
   }
@@ -695,7 +719,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
       var list = d.ops || []; d.ops = [];
       if (!d.views) d.views = [];
       setupDoc(d); fillPaper();
-      for (var i = 0; i < list.length; i++) { applyOp(dctx, list[i], doc.paper, W, H); finalizeOp(list[i]); }
+      for (var i = 0; i < list.length; i++) { applyOp(dctx, list[i], doc.paper, W, H); finalizeOp(list[i]); if (list[i].k === 'c') hasClearOp = true; }
       doc.ops = ops;
       tool.color = isDark(doc.paper) ? '#ffffff' : '#000000';
       recView(true);
@@ -883,7 +907,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     if (k === 'home') actHome();
     else if (k === 'undo') doUndo();
     else if (k === 'redo') doRedo();
-    else if (k === 'clear') { if (mode === 'none' && confirm('그림을 전부 지울까요?\n(다음 획을 그리기 전까지는 "취소"로 되돌릴 수 있어요)')) { var op = { k: 'c', t: ts(), d: 0 }; applyOp(dctx, op, doc.paper, W, H); commitOp(op); markFull(); } }
+    else if (k === 'clear') { if (mode === 'none' && confirm('그림을 전부 지울까요?\n(다음 획을 그리기 전까지는 "취소"로 되돌릴 수 있어요)')) { var op = { k: 'c', t: ts(), d: 0 }; applyOp(dctx, op, doc.paper, W, H); commitOp(op); hasClearOp = true; markFull(); } }
     else if (k === 'hand') { hand = !hand; refreshTools(); }
     else if (k === 'fit') { var z = fitZ(); view.z = z; view.a = 0; view.ox = (vw - W * z) / 2; view.oy = (vh - H * z) / 2; clampView(view); recView(true); markFull(); }
     else if (k === 'upright') { var pc = inv(view, vw / 2, vh / 2); view.a = 0; placeAt(view, pc.x, pc.y, vw / 2, vh / 2); clampView(view); recView(true); markFull(); }
