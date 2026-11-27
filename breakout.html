@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="style.css?v=16">
 <style>
   body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  #info { text-align: center; font-size: 20px; margin: 4px 0 8px; }
   canvas { display: block; margin: 0 auto; background: #1d2330; border-radius: 8px; }
   #msg { text-align: center; font-size: 22px; font-weight: bold; color: #e5484d; height: 28px; margin-top: 6px; }
   .pad { text-align: center; margin-top: 8px; }
@@ -18,7 +17,6 @@
 <body>
 <div class="top"><a href="index.html">‹ 홈</a> 벽돌깨기</div>
 <div class="wrap">
-  <div id="info">점수 <b id="sc">0</b> · 목숨 <b id="lv">3</b> · 단계 <b id="st">1</b> · 최고 <b id="best">0</b></div>
   <canvas id="cv" width="300" height="470"></canvas>
   <div id="msg"></div>
   <div class="pad">
@@ -74,7 +72,8 @@
   }
   function $(i) { return document.getElementById(i); }
   function layout() {
-    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 260) * (W / H), 600);
+    // #info 줄을 캔버스 안으로 옮기면서 그만큼(약 35px) 줄어든 여백을 반영
+    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 225) * (W / H), 600);
     if (w < 240) w = 240;
     cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
   }
@@ -377,9 +376,10 @@
     updateInfo(); draw();
     SFX.play('start'); SFX.musicStartIfNotOff(true);
   }
-  function updateInfo() {
-    $('sc').textContent = score; $('lv').textContent = lives; $('st').textContent = stage; $('best').textContent = Math.max(best, score);
-  }
+  // 점수/목숨/단계/최고를 이제 캔버스 안(drawScoreHud)에 매 프레임 직접 그려서
+  // 항상 최신 값이라, 더 이상 따로 갱신할 DOM이 없음 — 호출부를 다 지우는 대신
+  // (11곳) 무해한 빈 함수로 남겨둠.
+  function updateInfo() {}
   function saveBest() {
     if (score > best) { best = score; try { localStorage.setItem('bestBreakout', best); } catch (e) {} }
   }
@@ -510,6 +510,15 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(label, x, y + 1);
   }
+  // 점수·목숨·단계·최고 기록을 캔버스 바깥 별도 줄(#info)로 안 띄우고 캔버스
+  // 안쪽(벽돌 윗줄 여백 OY=16px) 오른쪽에 직접 그려서, 그만큼 캔버스를 더
+  // 크게 쓸 수 있게 함("상단 텍스트 때문에 게임 화면이 작게 보인다"는 피드백).
+  function drawScoreHud() {
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('점수 ' + score + ' · 목숨 ' + lives + ' · 단계 ' + stage + ' · 최고 ' + Math.max(best, score), W - 6, 3);
+  }
   function drawHud() {
     var x = 6, y = 4;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -554,6 +563,7 @@
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    drawScoreHud();
     drawHud();
     if (flashT > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (flashT * 0.25) + ')'; ctx.fillRect(0, 0, W, H); }
     ctx.restore();
