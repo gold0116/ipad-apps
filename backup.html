@@ -222,7 +222,7 @@
     x.onreadystatechange = function () {
       if (x.readyState !== 4) return;
       if (x.status >= 200 && x.status < 300) say('msg4', 'Firebase로 백업을 올렸어요', 'ok');
-      else say('msg4', '업로드 실패 (상태 ' + x.status + ') — 주소/비밀을 확인하세요', 'warn');
+      else say('msg4', '업로드 실패 (상태 ' + x.status + '): ' + String(x.responseText || '').substr(0, 200), 'warn');
     };
     x.onerror = function () { say('msg4', '업로드 실패 — 인터넷 연결이나 주소를 확인하세요', 'warn'); };
     try { x.send(makeBackup()); } catch (e) { say('msg4', '업로드 실패: ' + String(e.message || e), 'warn'); }
@@ -234,7 +234,7 @@
     x.open('GET', t.url, true);
     x.onreadystatechange = function () {
       if (x.readyState !== 4) return;
-      if (x.status < 200 || x.status >= 300) { say('msg4', '다운로드 실패 (상태 ' + x.status + ') — 주소/비밀을 확인하세요', 'warn'); return; }
+      if (x.status < 200 || x.status >= 300) { say('msg4', '다운로드 실패 (상태 ' + x.status + '): ' + String(x.responseText || '').substr(0, 200), 'warn'); return; }
       if (!x.responseText || x.responseText === 'null') { say('msg4', 'Firebase에 올려둔 백업이 아직 없어요', 'warn'); return; }
       var o = parseBackup(x.responseText);
       if (!o) { say('msg4', 'Firebase에서 가져온 데이터가 올바르지 않아요', 'warn'); return; }
