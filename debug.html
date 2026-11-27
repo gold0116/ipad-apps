@@ -208,6 +208,88 @@
     })();
   </script>
 
+  <h2>그림판 한계 테스트</h2>
+  <p style="font-size:14px;color:#666">그림판이 실제로 "손으로 계속 그리는 것"과 똑같은 방식으로 획을 자동으로
+  계속 그어가며 몇 획까지 버티는지 재요. 메모리 부족으로 페이지가
+  새로고침돼도(크래시) 마지막 기록이 남아있어서, 다시 이 페이지로 돌아와
+  "마지막 결과"를 보면 어디서 멈췄는지 알 수 있어요. 켜 두고 다른 일을
+  보다가 나중에 와서 확인해도 돼요(새로고침되면 테스트가 자동으로 이어짐).
+  </p>
+  <div class="row">
+    <div class="lb">설정</div>
+    <div style="font-size:14px;line-height:2">
+      자동 저장: <select id="stCfgSave"><option value="1">켬(평소처럼)</option><option value="0">끔(저장 비용만 떼어서 테스트)</option></select><br>
+      획 하나당 점 개수: <input type="number" id="stCfgPts" value="40" style="width:70px"> 개
+      · 획 사이 간격: <input type="number" id="stCfgGap" value="200" style="width:70px"> ms<br>
+      최대 획수(0=끝까지): <input type="number" id="stCfgMax" value="0" style="width:90px"> 획
+    </div>
+    <div style="margin-top:8px">
+      <button class="btn" id="stStart">새 테스트 시작</button>
+      <button class="btn gray" id="stRefresh">결과 새로고침</button>
+      <button class="btn red" id="stClear">로그·테스트그림 지우기</button>
+    </div>
+  </div>
+  <div class="row">
+    <div class="lb">마지막(또는 지금 진행 중인) 결과</div>
+    <table id="stResult"></table>
+  </div>
+  <p style="font-size:13px;color:#888">"저장 끔"으로 켰을 때와 "켬"일 때 버티는 획수가 크게 다르면, 자동저장
+  쪽이 원인이라는 뜻이고, 비슷하게 죽으면 캔버스 쪽(화면에 그리는 자체)이
+  원인이라는 뜻이에요 — 두 번 돌려서 비교해 보면 다음에 뭘 고쳐야 할지
+  알 수 있어요.</p>
+  <script>
+  (function () {
+    function $(i) { return document.getElementById(i); }
+    function fmtT(ms) { if (!ms) return '-'; var d = new Date(ms); function z(n) { return n < 10 ? '0' + n : n; } return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()); }
+    function readLog() { try { return JSON.parse(localStorage.getItem('_drawStressLog') || 'null'); } catch (e) { return null; } }
+    function render() {
+      var lg = readLog();
+      if (!lg) { $('stResult').innerHTML = '<tr><td colspan="2" style="color:#888">아직 테스트한 적 없음</td></tr>'; return; }
+      var ago = Math.round((+new Date() - lg.lastCheckpointAt) / 1000);
+      var stale = lg.running && ago > 15; // 진행중인데 15초 넘게 체크포인트가 없으면 멈춘(크래시 후 안 돌아옴) 것으로 봄
+      var rows = [
+        ['상태', lg.running ? (stale ? '멈춘 것으로 보임(테스트 페이지가 안 돌고 있음)' : '진행 중') : '끝남 (' + (lg.note || '') + ')'],
+        ['누적 획수', lg.strokeCount + '획'],
+        ['누적 점 개수', lg.totalPoints + '개'],
+        ['크래시(새로고침) 횟수', lg.crashes + '회'],
+        ['자동 저장', lg.saveMode === 'off' ? '끔' : '켬'],
+        ['도화지 크기', lg.w + ' × ' + lg.h],
+        ['획당 점 개수 / 간격', lg.ptsPerStroke + '개 / ' + lg.gapMs + 'ms'],
+        ['시작 시각', fmtT(lg.startedAt)],
+        ['마지막 기록 시각', fmtT(lg.lastCheckpointAt) + ' (' + ago + '초 전)'],
+        ['그림 id', lg.id]
+      ];
+      var h = ''; for (var i = 0; i < rows.length; i++) h += '<tr><td>' + rows[i][0] + '</td><td>' + rows[i][1] + '</td></tr>';
+      $('stResult').innerHTML = h;
+    }
+    $('stStart').addEventListener('click', function () {
+      var pts = Math.max(2, Math.min(2000, +$('stCfgPts').value || 40));
+      var gap = Math.max(0, Math.min(5000, +$('stCfgGap').value || 200));
+      var max = Math.max(0, +$('stCfgMax').value || 0);
+      var save = $('stCfgSave').value;
+      try { localStorage.removeItem('_drawStressLog'); } catch (e) {}
+      location.href = 'drawpad.html?stress=1&new=1&w=1024&h=768&paper=%23ffffff' +
+        '&stressSave=' + save + '&stressGap=' + gap + '&stressPts=' + pts + (max ? '&stressMax=' + max : '');
+    });
+    $('stRefresh').addEventListener('click', render);
+    $('stClear').addEventListener('click', function () {
+      var lg = readLog();
+      if (lg && lg.id) {
+        try { localStorage.removeItem('_draw_' + lg.id); } catch (e) {}
+        try {
+          var idx = JSON.parse(localStorage.getItem('_drawIdx') || '[]'), out = [], i;
+          for (i = 0; i < idx.length; i++) if (idx[i].id !== lg.id) out.push(idx[i]);
+          localStorage.setItem('_drawIdx', JSON.stringify(out));
+        } catch (e) {}
+      }
+      try { localStorage.removeItem('_drawStressLog'); } catch (e) {}
+      render();
+    });
+    render();
+    setInterval(render, 2000);
+  })();
+  </script>
+
   <h2>한자 글꼴 시험 (장기 기물)</h2>
   <p style="font-size:14px;color:#666">장기 기물에 쓰는 한자예요. 네모(□)나 빈칸 없이 <b>글자 모양</b>으로 모두 보이면 장기에서 "한자"를 쓸 수 있어요. 아래 두 줄 모두 확인해 주세요.</p>
   <div class="row"><div class="lb">M. 일반 글자 (초: 楚 卒 / 한: 漢 兵 / 공통: 象 馬 車 包 士)</div>

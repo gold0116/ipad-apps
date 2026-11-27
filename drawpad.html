@@ -298,9 +298,11 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     var u = ''; try { u = c.toDataURL('image/jpeg', 0.7); } catch (e) {}
     return u;
   }
+  var stressNoSave = false; // 한계 테스트에서 "저장 끄고" 모드일 때 true — 실제 localStorage 쓰기만 건너뜀
   function saveNow() {
     clearTimeout(saveTimer); flushRebuild();
     if (!doc || !dirtySave) return;
+    if (stressNoSave) { dirtySave = false; lastRealSave = +new Date(); $('sv').textContent = '저장 끔(테스트)'; return; }
     doc.ops = ops; doc.T = TT; doc.upd = +new Date();
     var okk = false;
     try { localStorage.setItem('_draw_' + doc.id, JSON.stringify(doc)); okk = true; } catch (e) { okk = false; }
@@ -699,8 +701,8 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     layout();
     var z = fitZ(); view.z = z; view.a = 0; view.ox = (vw - W * z) / 2; view.oy = (vh - H * z) / 2;
   }
-  function newDocFromParams(W_, H_, paper) {
-    var d = { v: 1, id: 'd' + (+new Date()), W: W_, H: H_, paper: paper, ops: [], views: [], T: 0, created: +new Date() };
+  function newDocFromParams(W_, H_, paper, id_) {
+    var d = { v: 1, id: id_ || ('d' + (+new Date())), W: W_, H: H_, paper: paper, ops: [], views: [], T: 0, created: +new Date() };
     TT = 0; lastReal = 0;
     setupDoc(d); fillPaper();
     tool.color = isDark(paper) ? '#ffffff' : '#000000';
@@ -708,7 +710,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     buildTools(); buildPalette(); updBtns(); markFull(); updZoomUI();
     hud('한 손가락: 그리기 / 두 손가락: 확대·이동·회전', 3500);
   }
-  function openDoc(id) {
+  function openDoc(id, done) {
     var s = null;
     try { s = localStorage.getItem('_draw_' + id); } catch (e) {}
     if (!s) { alert('그림을 찾을 수 없어요.'); location.href = 'draw.html'; return; }
@@ -724,6 +726,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
       tool.color = isDark(doc.paper) ? '#ffffff' : '#000000';
       recView(true);
       buildTools(); buildPalette(); updBtns(); markFull(); updZoomUI(); $('sv').textContent = '저장됨'; hud('');
+      if (done) done();
     }, 40);
   }
 
@@ -932,6 +935,92 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   window.addEventListener('resize', function () { setTimeout(layout, 50); }, false);
   window.addEventListener('orientationchange', function () { setTimeout(layout, 300); }, false);
 
+  /* ---------- 한계 테스트(디버그 페이지 → ?stress=1로 옴) ----------
+     실제 그리기 코드(Stroker/commitOp/trimAfterClear/markSave)를 그대로
+     반복 호출해서 "몇 획까지 버티는지"를 재본다. 체크포인트를 작고
+     가벼운 별도 localStorage 키에 매 획마다 적어두기 때문에, 아이패드가
+     메모리 부족으로 페이지를 새로고침해도(크래시) 마지막으로 기록된
+     지점이 남아있어 디버그 페이지에서 확인할 수 있다. 새로고침되면
+     주소(?id=로 바뀜)가 그대로라 같은 그림을 이어서 테스트한다. */
+  var LOGK = '_drawStressLog';
+  function stressReadLog() { try { return JSON.parse(localStorage.getItem(LOGK) || 'null'); } catch (e) { return null; } }
+  function stressWriteLog(running, note) {
+    try {
+      localStorage.setItem(LOGK, JSON.stringify({
+        id: doc.id, running: !!running, startedAt: stressCfg.startedAt, lastCheckpointAt: +new Date(),
+        strokeCount: stressCfg.count, totalPoints: stressCfg.points, crashes: stressCfg.crashes,
+        saveMode: stressCfg.noSave ? 'off' : 'on', w: W, h: H, ptsPerStroke: stressCfg.pts, gapMs: stressCfg.gap,
+        note: note || ''
+      }));
+    } catch (e) {}
+  }
+  var stressCfg = null, stressTimer = 0, stressBox = null, stressRecent = [];
+  function stressOverlay(text) {
+    if (!stressBox) {
+      stressBox = document.createElement('div');
+      stressBox.style.cssText = 'position:fixed;left:0;top:0;right:0;background:#c00;color:#fff;font-size:13px;line-height:1.4;padding:6px 86px 6px 10px;z-index:999;white-space:pre-wrap';
+      stressBox.appendChild(document.createTextNode(''));
+      var btn = document.createElement('span');
+      btn.textContent = '그만';
+      btn.style.cssText = 'position:absolute;right:8px;top:6px;background:#fff;color:#c00;border-radius:6px;padding:2px 10px';
+      btn.onclick = function () { stressStop('사용자가 "그만" 누름'); };
+      stressBox.appendChild(btn);
+      document.body.appendChild(stressBox);
+    }
+    stressBox.childNodes[0].nodeValue = text;
+  }
+  function synthStroke(nPts) {
+    var ang = Math.random() * 6.2832, x = Math.random() * W, y = Math.random() * H, q = [], i;
+    for (i = 0; i < nPts; i++) {
+      x += Math.cos(ang) * 6 + (Math.random() - 0.5) * 4; y += Math.sin(ang) * 6 + (Math.random() - 0.5) * 4;
+      if (x < 0 || x > W || y < 0 || y > H) ang = Math.random() * 6.2832;
+      x = Math.max(0, Math.min(W, x)); y = Math.max(0, Math.min(H, y));
+      q.push(r1(x), r1(y));
+    }
+    var op = { k: 's', p: 'pen', c: '#000000', w: 6, a: 1, t: ts(), d: 0, s: Math.floor(Math.random() * 1000000), q: q };
+    var sst = new Stroker(op, doc.paper);
+    sst.upTo(dctx, nPts, true);
+    op.d = Math.max(0, ts() - op.t);
+    markFull();
+    commitOp(op);
+  }
+  function stressStep() {
+    var t0 = +new Date();
+    try { synthStroke(stressCfg.pts); }
+    catch (e) { stressWriteLog(false, '오류로 중단: ' + String(e.message || e)); stressOverlay('한계 테스트 오류로 중단: ' + String(e.message || e)); return; }
+    var ms = +new Date() - t0, i, avg = 0;
+    stressRecent.push(ms); if (stressRecent.length > 10) stressRecent.shift();
+    for (i = 0; i < stressRecent.length; i++) avg += stressRecent[i]; avg = Math.round(avg / stressRecent.length);
+    stressCfg.count++; stressCfg.points += stressCfg.pts;
+    stressWriteLog(true);
+    stressOverlay('한계 테스트 중 — 누적 ' + stressCfg.count + '획 / ' + stressCfg.points + '점 / 크래시 ' + stressCfg.crashes + '회 / 최근 평균 ' + avg + 'ms (저장:' + (stressCfg.noSave ? '끔' : '켬') + ')');
+    if (stressCfg.max && stressCfg.count >= stressCfg.max) { stressStop('설정한 개수(' + stressCfg.max + '획)에 도달'); return; }
+    stressTimer = setTimeout(stressStep, stressCfg.gap);
+  }
+  function stressStop(reason) {
+    clearTimeout(stressTimer); stressTimer = 0; stressNoSave = false;
+    if (stressCfg) stressWriteLog(false, reason || '');
+    stressOverlay('한계 테스트 끝 — ' + (reason || '') + ' (누적 ' + (stressCfg ? stressCfg.count : 0) + '획)');
+  }
+  function startStressTest(qs) {
+    var prev = stressReadLog(), crashes = 0, count = 0, points = 0, startedAt = +new Date();
+    if (prev && prev.id === doc.id) {
+      startedAt = prev.startedAt || startedAt; count = prev.strokeCount || 0; points = prev.totalPoints || 0;
+      crashes = (prev.crashes || 0) + (prev.running ? 1 : 0);
+    }
+    stressCfg = {
+      pts: Math.max(2, Math.min(2000, parseInt(qs.stressPts, 10) || 40)),
+      gap: Math.max(0, Math.min(5000, parseInt(qs.stressGap, 10) || 250)),
+      max: Math.max(0, parseInt(qs.stressMax, 10) || 0),
+      noSave: qs.stressSave === '0',
+      count: count, points: points, crashes: crashes, startedAt: startedAt
+    };
+    stressNoSave = stressCfg.noSave;
+    stressWriteLog(true, crashes > (prev && prev.crashes || 0) ? '이전 실행이 중간에 멈춰서 이어서 시작(크래시로 추정)' : '시작');
+    stressOverlay('한계 테스트 시작 — 이전 누적 ' + count + '획 / 크래시 ' + crashes + '회');
+    stressTimer = setTimeout(stressStep, 300);
+  }
+
   /* ---------- 시작: 주소의 ?id=기존그림 또는 ?new=1&w=&h=&paper=로 분기 ---------- */
   function parseQS() {
     var qs = {}, raw = location.search.replace(/^\?/, ''), parts, i, p;
@@ -946,11 +1035,24 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   window.addEventListener('load', layout, false);
   (function start() {
     var qs = parseQS();
-    if (qs.id) { openDoc(qs.id); return; }
+    if (qs.id) { openDoc(qs.id, qs.stress === '1' ? function () { startStressTest(qs); } : undefined); return; }
     if (qs['new']) {
       var W_ = Math.max(64, Math.min(3072, parseInt(qs.w, 10) || 1024));
       var H_ = Math.max(64, Math.min(2304, parseInt(qs.h, 10) || 768));
       var paper = /^#[0-9a-fA-F]{6}$/.test(qs.paper) ? qs.paper : '#ffffff';
+      if (qs.stress === '1') {
+        // 한계 테스트: 새 그림을 한 번 만든 뒤, 이후 아이패드가 메모리
+        // 부족으로 새로고침해도 같은 그림을 이어서 테스트하도록 주소를
+        // ?id=로 바꿔서 교체해둔다(이 주소가 그대로 새로고침됨).
+        var sid = 'stress' + (+new Date());
+        newDocFromParams(W_, H_, paper, sid);
+        location.replace('drawpad.html?stress=1&id=' + sid +
+          '&stressSave=' + (qs.stressSave || '1') +
+          '&stressGap=' + (qs.stressGap || '250') +
+          '&stressPts=' + (qs.stressPts || '40') +
+          (qs.stressMax ? '&stressMax=' + encodeURIComponent(qs.stressMax) : ''));
+        return;
+      }
       newDocFromParams(W_, H_, paper);
       return;
     }
