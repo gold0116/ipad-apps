@@ -1,5 +1,5 @@
 CACHE MANIFEST
-# v114 2026-11-27
+# v115 2026-11-27
 
 version.js?v=1
 emoji.js?v=16
@@ -63,6 +63,7 @@ snake.html
 tictactoe.html
 memory.html
 draw.html
+drawpad.html
 rhythm.html
 mole.html
 slide.html
