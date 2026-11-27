@@ -233,8 +233,11 @@
     el.addEventListener('mouseleave', off, false);
   }
 
-  // ---- 확대/축소(핀치) + 스크롤 버튼: 화면 확대율만 바뀌고, 핀치 중심이
-  // 가리키던 건반이 화면에서 그대로 유지되도록 스크롤 위치도 같이 보정한다 ----
+  // ---- 확대/축소(+/- 버튼) + 스크롤 버튼 ----
+  // 예전엔 두 손가락 핀치로도 확대/축소가 됐는데, 건반 두 개를 동시에
+  // 눌러서 화음을 칠 때마다 손가락 두 개가 인식돼 의도치 않게 확대/축소가
+  // 돼서 연주를 방해하는 문제가 있었음("핀치"와 "화음 터치"를 구분할 방법이
+  // 마땅치 않아 아예 뺌) — +/- 버튼으로만 확대/축소하도록 바꿈.
   function setZoom(z, anchorX) {
     var box = $('pianoScroll'), oldKw = keyW();
     if (anchorX == null) anchorX = box.clientWidth / 2;
@@ -244,26 +247,6 @@
     buildPiano();
     box.scrollLeft = idx * keyW() - anchorX;
   }
-  var pinch = null;
-  function pinchLocal(t) { var r = $('pianoScroll').getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; }
-  function pinchDist(a, b) { var dx = b.x - a.x, dy = b.y - a.y; return Math.sqrt(dx * dx + dy * dy); }
-  $('pianoScroll').addEventListener('touchstart', function (e) {
-    if (e.touches.length >= 2) {
-      var a = pinchLocal(e.touches[0]), b = pinchLocal(e.touches[1]);
-      pinch = { dist: pinchDist(a, b), mid: (a.x + b.x) / 2 };
-    }
-  }, false);
-  $('pianoScroll').addEventListener('touchmove', function (e) {
-    if (e.touches.length >= 2 && pinch) {
-      e.preventDefault();
-      var a = pinchLocal(e.touches[0]), b = pinchLocal(e.touches[1]);
-      var dist = pinchDist(a, b), mid = (a.x + b.x) / 2;
-      if (pinch.dist > 10) setZoom(zoom * (dist / pinch.dist), mid);
-      pinch.dist = dist; pinch.mid = mid;
-    }
-  }, false);
-  $('pianoScroll').addEventListener('touchend', function (e) { if (e.touches.length < 2) pinch = null; }, false);
-  $('pianoScroll').addEventListener('touchcancel', function () { pinch = null; }, false);
   $('zoomOut').onclick = function () { setZoom(zoom / 1.2); };
   $('zoomIn').onclick = function () { setZoom(zoom * 1.2); };
   $('scrollLeftBtn').onclick = function () { $('pianoScroll').scrollLeft -= keyW() * 7; };
