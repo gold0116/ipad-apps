@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.5';
-window.APP_VERSION_NOTE = '피아노: 핀치 줌 제거 — 화음(두 손가락) 연주 중 의도치 않게 확대/축소되던 문제, 확대/축소는 +/- 버튼으로만';
+window.APP_VERSION = '0.5.6';
+window.APP_VERSION_NOTE = '그림판: 곡선을 여러 개 그리면 메모리 부족으로 리프레시되던 문제 — 되돌리기 조각 예산(PATBUD/PATMAX)을 줄임';
 window.APP_VERSION_DATE = '2026-11-27';
