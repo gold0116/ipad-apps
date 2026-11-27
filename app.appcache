@@ -1,9 +1,9 @@
 CACHE MANIFEST
-# v107 2026-11-27
+# v108 2026-11-27
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=45
+sound.js?v=48
 touchfx.js?v=3
 vfx.js?v=2
 vendor/webaudiofont/WebAudioFontPlayer.js?v=1
@@ -63,6 +63,7 @@ snake.html
 tictactoe.html
 memory.html
 draw.html
+rhythm.html
 mole.html
 slide.html
 trash.html

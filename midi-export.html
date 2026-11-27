@@ -46,6 +46,12 @@
     <h2>2. 트랙 선택</h2>
     <p id="meta" class="small"></p>
     <table id="tr"></table>
+    <div style="margin-top:10px">
+      <button class="btn" id="pv">▶ 선택한 트랙 미리 듣기</button>
+      <button class="btn gray" id="pvstop" style="display:none">■ 정지</button>
+      <span id="pvt" class="small"></span>
+    </div>
+    <div class="small">체크한 트랙을 합쳐서, 변환하면 나올 소리 그대로 들려줘요. 줄마다 있는 "듣기"로 한 트랙만 따로 들을 수도 있어요. 드럼(타악기) 소리는 나지 않고 변환에서도 빠져요.</div>
     <p style="margin:10px 0 4px">곡 이름</p>
     <input type="text" id="nm">
     <div style="margin-top:10px"><button class="btn" id="mk">곡 텍스트 만들기</button></div>
@@ -73,6 +79,7 @@
     <ul id="songs"></ul>
   </div>
 </div>
+<script src="sound.js?v=48"></script>
 <script>
 (function () {
   function $(i) { return document.getElementById(i); }
@@ -141,11 +148,12 @@
     curName = title; say($('fmsg'), '');
     $('nm').value = title;
     $('meta').textContent = '템포 ' + Math.round(cur.bpm) + ' BPM (첫 값 기준, 중간에 바뀌는 템포는 무시) · 트랙 ' + cur.tracks.length + '개';
-    var h = '<tr><th>사용</th><th>트랙</th><th>채널</th><th>음 개수</th><th>음역</th></tr>';
+    stopPreview();
+    var h = '<tr><th>사용</th><th>트랙</th><th>채널</th><th>음 개수</th><th>음역</th><th>듣기</th></tr>';
     for (var i = 0; i < cur.tracks.length; i++) {
       var tr = cur.tracks[i]; if (!tr.notes.length) continue;
       var drums = tr.chs.length === 1 && tr.chs[0] === 10;
-      h += '<tr><td><input type="checkbox" class="ck" data-i="' + i + '"' + (drums ? '' : ' checked') + '></td><td>' + (tr.name || ('트랙 ' + (i + 1))) + (drums ? ' (드럼)' : '') + '</td><td>' + tr.chs.join(',') + '</td><td>' + tr.notes.length + '</td><td>' + range(tr.notes) + '</td></tr>';
+      h += '<tr><td><input type="checkbox" class="ck" data-i="' + i + '"' + (drums ? '' : ' checked') + '></td><td>' + (tr.name || ('트랙 ' + (i + 1))) + (drums ? ' (드럼)' : '') + '</td><td>' + tr.chs.join(',') + '</td><td>' + tr.notes.length + '</td><td>' + range(tr.notes) + '</td><td><button class="btn gray solo" data-i="' + i + '" style="padding:6px 10px;font-size:14px">▶ 듣기</button></td></tr>';
     }
     $('tr').innerHTML = h;
     $('step2').style.display = 'block'; $('step3').style.display = 'none';
@@ -181,19 +189,67 @@
     r.readAsArrayBuffer(f);
   };
 
-  function build() {
-    var cks = document.querySelectorAll('.ck'), notes = [], end = 0, i, j;
-    for (i = 0; i < cks.length; i++) if (cks[i].checked) {
-      var tr = cur.tracks[parseInt(cks[i].getAttribute('data-i'), 10)];
+  // only: 트랙 번호 배열(한 트랙만 듣기용). 없으면 체크된 트랙 전부
+  function build(only) {
+    var cks = document.querySelectorAll('.ck'), notes = [], end = 0, i, j, tn = {};
+    for (i = 0; i < cks.length; i++) if (only ? only[0] === parseInt(cks[i].getAttribute('data-i'), 10) : cks[i].checked) {
+      var ti = parseInt(cks[i].getAttribute('data-i'), 10), tr = cur.tracks[ti];
+      tn[ti] = tr.name || ('트랙 ' + (ti + 1));
       for (j = 0; j < tr.notes.length; j++) {
-        var o = tr.notes[j], st = Math.round(o.t / cur.div * 1000) / 1000, du = Math.max(0.05, Math.round(o.d / cur.div * 1000) / 1000);
-        notes.push([st, o.n, du]); if (st + du > end) end = st + du;
+        var o = tr.notes[j]; if (o.ch === 9) continue; // 채널 10 = 타악기(드럼): 음높이가 아니라 악기 번호라서 뺀다
+        var st = Math.round(o.t / cur.div * 1000) / 1000, du = Math.max(0.05, Math.round(o.d / cur.div * 1000) / 1000);
+        notes.push([st, o.n, du, ti]); if (st + du > end) end = st + du;
       }
     }
     if (!notes.length) return null;
     notes.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
-    return { name: $('nm').value || curName, bpm: Math.round(cur.bpm), beats: Math.ceil(end), notes: notes };
+    // 네 번째 값 = 트랙 번호, tn = 트랙 이름 (리듬 게임이 멜로디 트랙을 고를 때 씀)
+    return { name: $('nm').value || curName, bpm: Math.round(cur.bpm), beats: Math.ceil(end), notes: notes, tn: tn };
   }
+  // ---- 미리 듣기: 변환 결과와 같은 곡 데이터를 만들어 sound.js의 곡 재생으로 들려준다 ----
+  var pvTimer = null, pvT0 = 0, pvDur = 0, pvTry = 0;
+  function mmss(s) { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); }
+  function stopPreview() {
+    SFX.songStop(); if (pvTimer) { clearInterval(pvTimer); pvTimer = null; }
+    pvTry = 9999;
+    $('pvstop').style.display = 'none'; $('pvt').textContent = '';
+    var bs = document.querySelectorAll('.solo'), i; for (i = 0; i < bs.length; i++) bs[i].textContent = '▶ 듣기';
+  }
+  function pvTick() {
+    var t = SFX.now() - pvT0;
+    if (!SFX.isPlaying() || t > pvDur + 1) { stopPreview(); return; }
+    $('pvt').className = 'small'; $('pvt').textContent = ' ' + mmss(t) + ' / ' + mmss(pvDur);
+  }
+  function startPreview(only) {
+    stopPreview();
+    var o = build(only);
+    if (!o) { say($('pvt'), ' 소리가 나는 음이 없어요 (드럼 트랙은 제외돼요)', 'warn'); return false; }
+    var r = SFX.defineSong('__preview', o);
+    if (!r.ok) { say($('pvt'), ' 재생할 수 없어요: ' + r.error, 'warn'); return false; }
+    say($('pvt'), ' 준비 중…'); pvTry = 0;
+    (function go() {
+      if (pvTry > 5000) return; // 그 사이 정지를 눌렀다
+      if (!SFX.ready() && pvTry++ < 60) { setTimeout(go, 50); return; }
+      var T0 = SFX.songPlay('__preview', 0.3);
+      if (T0 < 0) { say($('pvt'), ' 소리를 시작하지 못했어요. 한 번 더 눌러 보세요.', 'warn'); return; }
+      pvT0 = T0; pvDur = o.beats * 60 / o.bpm;
+      $('pvstop').style.display = 'inline-block';
+      pvTimer = setInterval(pvTick, 250); pvTick();
+    })();
+    return true;
+  }
+  $('pv').onclick = function () { startPreview(null); };
+  $('pvstop').onclick = stopPreview;
+  $('tr').onclick = function (e) {
+    var t = e.target;
+    if (!t || (' ' + t.className + ' ').indexOf(' solo ') < 0) return;
+    var i = parseInt(t.getAttribute('data-i'), 10), was = t.textContent === '■ 정지';
+    stopPreview();
+    if (was) return;
+    if (startPreview([i])) t.textContent = '■ 정지';
+  };
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopPreview(); }, false);
+
   function showText(obj) {
     curObj = obj;
     var txt = JSON.stringify(obj);

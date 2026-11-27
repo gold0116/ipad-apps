@@ -80,7 +80,7 @@
     }
     var last = ev[ev.length - 1];
     var beats = j.beats || Math.ceil(last.t + last.d);
-    return { ev: ev, beats: beats, beat: 60 / j.bpm, scale: Math.min(1, 2.4 / maxPoly), count: ev.length, seconds: beats * 60 / j.bpm, name: j.name || '' };
+    return { ev: ev, beats: beats, beat: 60 / j.bpm, scale: Math.min(1, 2.4 / maxPoly), count: ev.length, seconds: beats * 60 / j.bpm, name: j.name || '', raw: notes, tn: j.tn || null };
   }
   function defineSong(id, obj) {
     try { var s = buildSong(obj, obj.mix || 'flat'); songs[id] = s; return { ok: true, count: s.count, seconds: s.seconds, name: s.name }; }
@@ -142,13 +142,18 @@
       }
     }
   }
-  function startMusic(restart) {
+  // force: 리듬 게임용(음소거여도 시계를 돌리려고 재생은 하되 음량만 0), lead: 첫 음까지 여유(초)
+  var songT0 = 0;
+  function startMusic(restart, force, lead) {
     wanted = true;
-    if (!ctx || muted || musicMuted || playing) return;
+    if (!ctx || playing) return;
+    if (!force && (muted || musicMuted)) return;
     if (restart) { evIdx = 0; loopN = 0; ended = false; }
     mGain = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
-    mGain.gain.value = curScale; mGain.connect(ctx.destination);
-    playing = true; lastT = ctx.currentTime + 0.15; lastBeat = EV[evIdx].t + loopN * SONG_BEATS;
+    mGain.gain.value = (muted || musicMuted) ? 0 : curScale; mGain.connect(ctx.destination);
+    playing = true; lastT = ctx.currentTime + (lead || 0.15); lastBeat = EV[evIdx].t + loopN * SONG_BEATS;
+    // 0박이 울리는 오디오 시각 (박 b의 시각 = songT0 + b * 박 길이)
+    songT0 = lastT - lastBeat * (BEAT / tempo);
     mTimer = setInterval(schedule, 120); schedule();
   }
   function halt() {
@@ -703,6 +708,9 @@
     // 나무 알이 판에 놓이는 "딱" / 상대 알을 잡을 때의 "딱-쿵"
     clack:    function () { tone(1500, 0.02, 'square', 0.07, 0, 700); tone(260, 0.07, 'sine', 0.22, 0, 110); },
     clackcap: function () { tone(1700, 0.02, 'square', 0.09, 0, 800); tone(240, 0.13, 'sine', 0.3, 0, 70); tone(900, 0.03, 'square', 0.06, 0.06, 400); },
+    // 리듬 게임 타격음: GOOD / PERFECT·GREAT
+    tap:    function () { tone(1900, 0.025, 'triangle', 0.07, 0); },
+    tapp:   function () { tone(2500, 0.03, 'triangle', 0.09, 0); tone(1250, 0.07, 'sine', 0.12, 0); },
     rotate: function () { tone(480, 0.05, 'square', 0.07, 0, 600); },
     drop:   function () { tone(140, 0.08, 'square', 0.12, 0, 80); },
     line:   function () { tone(523, 0.08, 'square', 0.1, 0); tone(659, 0.08, 'square', 0.1, 0.08); tone(784, 0.08, 'square', 0.1, 0.16); tone(1047, 0.16, 'square', 0.1, 0.24); },
@@ -812,7 +820,21 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 47,
+    version: 48,
+    // ---- 리듬 게임 / MIDI 미리 듣기용 곡 시계 ----
+    now: function () { return ctx ? ctx.currentTime : -1; },
+    ready: function () { return !!ctx && (!ctx.state || ctx.state === 'running'); },
+    getSong: function (id) { return songs[id] || null; },
+    // 곡을 한 번만(반복 없이) 재생하고 0박의 오디오 시각을 돌려준다. 실패하면 -1
+    songPlay: function (id, lead) {
+      if (!ctx || !songs[id]) return -1;
+      wanted = false; halt(); loopOn = false; tempo = 1;
+      var s = songs[id];
+      EV = s.ev; SONG_BEATS = s.beats; BEAT = s.beat; curScale = s.scale || 1; evIdx = 0; loopN = 0; ended = false;
+      startMusic(true, true, lead || 2);
+      return playing ? songT0 : -1;
+    },
+    songStop: function () { wanted = false; halt(); evIdx = 0; loopN = 0; ended = false; loopOn = true; },
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -845,7 +867,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 47, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 48, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}

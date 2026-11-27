@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>리듬 게임</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .sec { margin: 16px 0 6px; font-weight: bold; color: #334; }
+  .opt { display: inline-block; font-size: 18px; padding: 12px 18px; margin: 4px 6px 4px 0; border: 2px solid #c9d2e6; border-radius: 10px; background: #fff; color: #334; }
+  .opt.on { background: #3b6df0; border-color: #3b6df0; color: #fff; }
+  .opt small { display: block; font-size: 12px; opacity: .8; margin-top: 2px; }
+  .go { display: block; width: 100%; font-size: 26px; padding: 20px 0; margin: 22px 0 8px; background: #e5484d; color: #fff; border: 0; border-radius: 12px; }
+  .note { color: #777; font-size: 14px; line-height: 1.5; }
+  #game, #res { position: fixed; left: 0; top: 0; right: 0; bottom: 0; display: none; }
+  #game { background: #12141f; z-index: 50; -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  #cv { display: block; }
+  #quit { position: absolute; left: 10px; top: 10px; font-size: 16px; padding: 8px 14px; color: #fff; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.4); border-radius: 8px; }
+  #res { background: rgba(10,12,24,.94); z-index: 60; color: #fff; text-align: center; overflow: auto; }
+  #res .in { max-width: 520px; margin: 0 auto; padding: 24px 16px; }
+  #res .grade { font-size: 96px; font-weight: bold; line-height: 1.1; }
+  #res .score { font-size: 38px; margin: 4px 0 10px; }
+  #res table { margin: 10px auto; font-size: 20px; border-collapse: collapse; }
+  #res td { padding: 4px 14px; text-align: left; }
+  #res td + td { text-align: right; }
+  #res .btn { margin: 8px 6px; font-size: 20px; padding: 14px 22px; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 리듬 게임</div>
+<div class="wrap" id="menu">
+  <div class="sec">곡</div>
+  <div id="songs"></div>
+  <div id="trkbox" style="display:none">
+    <div class="sec">멜로디로 쓸 파트 <span style="font-weight:normal;color:#777;font-size:13px">(곡에 파트 정보가 있을 때만)</span></div>
+    <div id="trks"></div>
+  </div>
+  <div class="sec">난이도</div>
+  <div id="diffs"></div>
+  <div class="sec">줄 수</div>
+  <div id="lanes"></div>
+  <div class="sec">떨어지는 속도</div>
+  <div id="speeds"></div>
+  <div class="sec">싱크 (소리와 터치 어긋남 보정)</div>
+  <div>
+    <span class="opt" id="offm">－</span><span id="offv" style="display:inline-block;min-width:110px;text-align:center;font-size:20px">0 ms</span><span class="opt" id="offp">＋</span>
+  </div>
+  <p class="note">노트가 판정선보다 <b>늦게</b> 눌리는 느낌이면 ＋, 빠르게 눌리는 느낌이면 －. 한 판 끝나면 평균 오차를 보고 추천해 줘요.</p>
+  <button class="go" id="start">시작</button>
+  <p class="note" id="best"></p>
+  <p class="note">가로로 돌려서 하면 편해요. 노트가 아래 선에 닿을 때 그 줄을 손가락으로 톡 치세요. <b>같은 음은 항상 같은 줄</b>에 나오고, 높은 음일수록 오른쪽 줄이에요. 여러 손가락으로 동시에 눌러도 돼요. 「코로베이니키」(러시아 민요, 테트리스 배경음)는 저작권이 없는 곡이에요.</p>
+</div>
+
+<div id="game">
+  <canvas id="cv"></canvas>
+  <button id="quit">나가기</button>
+</div>
+<div id="res"><div class="in" id="resin"></div></div>
+
+<script src="sound.js?v=48"></script>
+<script>
+(function () {
+  var LANES = 4;
+  var COLORS = ['#ff5a7a', '#ffb23e', '#f2e04a', '#3ecf8e', '#4aa3ff', '#b27cff'];
+  var WIN = { p: 0.05, g: 0.10, o: 0.16 };
+  var DIFFS = [
+    { id: 'easy', name: '쉬움', gap: 1, grid: 0.5 },
+    { id: 'normal', name: '보통', gap: 0.5, grid: 0.25 },
+    { id: 'hard', name: '어려움', gap: 0.25, grid: 0, chord: true }
+  ];
+  var SPEEDS = [{ id: 0, name: '느림', v: 0.8 }, { id: 1, name: '보통', v: 1.0 }, { id: 2, name: '빠름', v: 1.25 }];
+  var NAMES = ['도', '도#', '레', '레#', '미', '파', '파#', '솔', '솔#', '라', '라#', '시'];
+  function $(id) { return document.getElementById(id); }
+  var cfg = { song: 'tetris', diff: 'normal', speed: 1, off: 0, lanes: 4, trk: 'auto' };
+  try { var c0 = JSON.parse(localStorage.getItem('rhythmCfg') || '{}'); for (var k in c0) cfg[k] = c0[k]; } catch (e) {}
+  var best = {};
+  try { best = JSON.parse(localStorage.getItem('rhythmBest') || '{}'); } catch (e) {}
+  function saveCfg() { try { localStorage.setItem('rhythmCfg', JSON.stringify(cfg)); } catch (e) {} }
+
+  // ---------- 곡 목록 ----------
+  var songList = [];
+  function addSong(id, name) { songList.push({ id: id, name: name }); }
+  (function () {
+    // 「코로베이니키」: sound.js의 곡 'a'(48박)를 3번 이어 붙여 약 1분짜리로 만든다
+    var a = SFX.getSong('a'), notes = [], r, i, e;
+    if (a) {
+      for (r = 0; r < 3; r++) {
+        for (i = 0; i < a.ev.length; i++) {
+          e = a.ev[i];
+          notes.push([e.t + r * a.beats, Math.round(69 + 12 * Math.log(e.f / 440) / Math.LN2), e.d]);
+        }
+      }
+      SFX.defineSong('tetris', { name: '코로베이니키', bpm: 150, beats: a.beats * 3, notes: notes, mix: 'flat' });
+      addSong('tetris', '코로베이니키 (테트리스 배경음)');
+    }
+    try {
+      var my = JSON.parse(localStorage.getItem('mymusic-list-v1') || '[]');
+      for (i = 0; i < my.length; i++) {
+        var res = SFX.defineSong('my' + my[i].id, JSON.parse(my[i].text));
+        if (res.ok) addSong('my' + my[i].id, '내 음악: ' + my[i].name);
+      }
+    } catch (e2) {}
+  })();
+
+  // ---------- 멜로디 추출 ----------
+  // 파트(트랙) 정보가 있는 곡: [박, 음, 길이, 파트번호]
+  function trackStats(song) {
+    var raw = song.raw, st = {}, i, k, n, any = false, list = [];
+    for (i = 0; i < raw.length; i++) {
+      if (raw[i][3] === undefined) continue;
+      any = true; k = raw[i][3]; n = raw[i][1];
+      if (!st[k]) st[k] = { id: k, cnt: 0, sum: 0, lo: 999, hi: -1 };
+      st[k].cnt++; st[k].sum += n; if (n < st[k].lo) st[k].lo = n; if (n > st[k].hi) st[k].hi = n;
+    }
+    if (!any) return null;
+    for (k in st) { st[k].mean = st[k].sum / st[k].cnt; list.push(st[k]); }
+    list.sort(function (a, b) { return a.id - b.id; });
+    return list;
+  }
+  // 자동: 음이 어느 정도 있는 파트 중에서 평균 음높이가 가장 높은 파트 = 멜로디
+  function autoTrack(list) {
+    var mx = 0, i, bst = null;
+    for (i = 0; i < list.length; i++) if (list[i].cnt > mx) mx = list[i].cnt;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].cnt < Math.max(8, mx * 0.25)) continue;
+      if (!bst || list[i].mean > bst.mean) bst = list[i];
+    }
+    return bst ? bst.id : list[0].id;
+  }
+  // 파트 정보가 없는 예전 곡: 타악기로 보이는 음을 거른다.
+  // 조건을 모두 만족할 때만: 같은 음이 같은 짧은 길이로, "일정한 간격"으로, 곡의 대부분에 걸쳐 반복.
+  // (길이만 보면 빠른 선율의 음(예: 캐논의 16분음표 파#·솔)까지 지워져서 간격 조건을 둔다)
+  function dropPerc(list) {
+    var by = {}, i, p, n, dk, kk, perc = {}, cut = 0, out = [], t0 = 1e9, t1 = -1e9;
+    for (i = 0; i < list.length; i++) {
+      n = list[i].n; dk = Math.round(list[i].d * 100);
+      p = by[n] || (by[n] = { cnt: 0, dc: {}, ts: [] }); p.cnt++; p.dc[dk] = (p.dc[dk] || 0) + 1; p.ts.push(list[i].t);
+      if (list[i].t < t0) t0 = list[i].t; if (list[i].t > t1) t1 = list[i].t;
+    }
+    for (n in by) {
+      p = by[n]; var mxc = 0, mxd = 0;
+      for (kk in p.dc) if (p.dc[kk] > mxc) { mxc = p.dc[kk]; mxd = parseInt(kk, 10); }
+      if (!(p.cnt >= 16 && n >= 35 && n <= 81 && mxc / p.cnt >= 0.85 && mxd <= 50)) continue;
+      p.ts.sort(function (a, b) { return a - b; });
+      var gaps = {}, g0, mg = 0;
+      for (i = 1; i < p.ts.length; i++) { g0 = Math.round((p.ts[i] - p.ts[i - 1]) * 100); gaps[g0] = (gaps[g0] || 0) + 1; }
+      for (kk in gaps) if (kk <= 400 && gaps[kk] > mg) mg = gaps[kk];
+      if (mg / (p.cnt - 1) >= 0.7 && p.ts[p.cnt - 1] - p.ts[0] >= (t1 - t0) * 0.6) { perc[n] = 1; cut += p.cnt; }
+    }
+    if (!cut || cut > list.length * 0.5 || list.length - cut < 8) return list;
+    for (i = 0; i < list.length; i++) if (!perc[list[i].n]) out.push(list[i]);
+    return out;
+  }
+  function melodyNotes(song, trk) {
+    var raw = song.raw, list = [], bass = [], i, r, n, ts = trackStats(song), sel = null;
+    if (ts) {
+      var has = false;
+      for (i = 0; i < ts.length; i++) if (ts[i].id === trk) has = true;
+      sel = (trk === 'auto' || !has) ? autoTrack(ts) : trk;
+    }
+    for (i = 0; i < raw.length; i++) {
+      r = raw[i]; n = r[1];
+      if (ts) {
+        if (r[3] === sel) list.push({ t: r[0], n: n, d: r[2] }); else if (n <= 48) bass.push(r[0]);
+      } else {
+        if (n <= 48) bass.push(r[0]); else list.push({ t: r[0], n: n, d: r[2] });
+      }
+    }
+    if (!ts) list = dropPerc(list);
+    return { list: list, bass: bass };
+  }
+
+  // ---------- 자동 채보 ----------
+  // 멜로디(같은 시각에서 가장 높은 음)를 뽑고 난이도만큼 솎은 뒤,
+  // 곡 전체 음높이를 줄 수만큼 같은 개수씩 나눠서 "같은 음 = 같은 줄, 높은 음 = 오른쪽"으로 배치한다
+  function makeChart(song, diffId, L, trk) {
+    var d = DIFFS[1], i;
+    for (i = 0; i < DIFFS.length; i++) if (DIFFS[i].id === diffId) d = DIFFS[i];
+    var m = melodyNotes(song, trk), src = m.list, cand = [], e;
+    src.sort(function (a, b) { return a.t - b.t; });
+    for (i = 0; i < src.length; i++) {
+      e = src[i];
+      if (cand.length && Math.abs(cand[cand.length - 1].t - e.t) < 0.01) { if (e.n > cand[cand.length - 1].n) cand[cand.length - 1].n = e.n; }
+      else cand.push({ t: e.t, n: e.n });
+    }
+    var out = [], last = -99, r;
+    for (i = 0; i < cand.length; i++) {
+      if (d.grid) { r = cand[i].t / d.grid; if (Math.abs(r - Math.round(r)) > 0.02) continue; }
+      if (cand[i].t - last < d.gap - 0.02) continue;
+      out.push(cand[i]); last = cand[i].t;
+    }
+    // 음높이 -> 줄
+    var cnt = {}, ps = [];
+    for (i = 0; i < out.length; i++) { if (!cnt[out[i].n]) { cnt[out[i].n] = 0; ps.push(out[i].n); } cnt[out[i].n]++; }
+    ps.sort(function (a, b) { return a - b; });
+    // 위치 = (음 순서 비율 + 실제 음정 간격 비율) / 2 : 음이 많이 몰린 곳도 줄이 비지 않고, 큰 도약은 멀리 간다
+    // 위치 = (음 순서 + 실제 음정 간격 + 음 개수 분포)의 평균 : 줄이 비거나 한 줄에 몰리지 않고, 큰 도약은 멀리 간다
+    var laneOf = {}, lo = ps[0], hi = ps[ps.length - 1], rf, pf, qs = [], cum = 0, qmin, qmax;
+    for (i = 0; i < ps.length; i++) { qs.push((cum + cnt[ps[i]] / 2) / out.length); cum += cnt[ps[i]]; }
+    qmin = qs[0]; qmax = qs[ps.length - 1];
+    for (i = 0; i < ps.length; i++) {
+      rf = ps.length > 1 ? i / (ps.length - 1) : 0.5;
+      pf = hi > lo ? (ps[i] - lo) / (hi - lo) : 0.5;
+      var qf = qmax > qmin ? (qs[i] - qmin) / (qmax - qmin) : 0.5;
+      laneOf[ps[i]] = Math.min(L - 1, Math.round((rf + pf + qf) / 3 * (L - 1)));
+    }
+    var notes = [], q, lane;
+    for (i = 0; i < out.length; i++) {
+      lane = laneOf[out[i].n];
+      notes.push({ t: out[i].t * song.beat, lane: lane, j: 0 });
+      // 어려움: 베이스가 같이 울리는 박에는 다른 줄에 동시 노트(두 손가락)를 하나 더 둔다
+      if (d.chord) {
+        for (q = 0; q < m.bass.length; q++) {
+          if (Math.abs(m.bass[q] - out[i].t) < 0.01) { notes.push({ t: out[i].t * song.beat, lane: (lane + Math.floor(L / 2)) % L, j: 0 }); break; }
+        }
+      }
+    }
+    return notes;
+  }
+
+  // ---------- 메뉴 ----------
+  function opt(parent, text, on, fn, sub) {
+    var b = document.createElement('span');
+    b.className = 'opt' + (on ? ' on' : '');
+    b.innerHTML = text + (sub ? '<small>' + sub + '</small>' : '');
+    b.onclick = fn; parent.appendChild(b);
+  }
+  function pn(n) { return NAMES[n % 12] + (Math.floor(n / 12) - 1); }
+  function bestKey() { return cfg.song + '|' + cfg.diff + '|' + cfg.lanes; }
+  function drawMenu() {
+    var i, p = $('songs'); p.innerHTML = '';
+    var ok = false;
+    for (i = 0; i < songList.length; i++) if (songList[i].id === cfg.song) ok = true;
+    if (!ok && songList.length) cfg.song = songList[0].id;
+    var sg = SFX.getSong(cfg.song);
+    (function () {
+      for (var i = 0; i < songList.length; i++) (function (s) {
+        opt(p, s.name, s.id === cfg.song, function () { cfg.song = s.id; cfg.trk = 'auto'; saveCfg(); drawMenu(); });
+      })(songList[i]);
+    })();
+    // 멜로디 파트
+    var ts = sg ? trackStats(sg) : null;
+    $('trkbox').style.display = ts ? 'block' : 'none';
+    if (ts) {
+      var tp = $('trks'); tp.innerHTML = '';
+      var cur = cfg.trk, has = false;
+      for (i = 0; i < ts.length; i++) if (ts[i].id === cur) has = true;
+      if (!has) cur = 'auto';
+      var autoId = autoTrack(ts);
+      opt(tp, '자동', cur === 'auto', function () { cfg.trk = 'auto'; saveCfg(); drawMenu(); }, '가장 높은 파트');
+      (function () {
+        for (var i = 0; i < ts.length; i++) (function (t) {
+          var nm = (sg.tn && sg.tn[t.id]) || ('파트 ' + (t.id + 1));
+          opt(tp, nm, cur === t.id, function () { cfg.trk = t.id; saveCfg(); drawMenu(); }, '음 ' + t.cnt + '개 · ' + pn(t.lo) + '~' + pn(t.hi) + (t.id === autoId ? ' · 자동 선택' : ''));
+        })(ts[i]);
+      })();
+    }
+    p = $('diffs'); p.innerHTML = '';
+    (function () {
+      for (var i = 0; i < DIFFS.length; i++) (function (d) {
+        var c = 0;
+        if (sg) c = makeChart(sg, d.id, cfg.lanes, cfg.trk).length;
+        opt(p, d.name, d.id === cfg.diff, function () { cfg.diff = d.id; saveCfg(); drawMenu(); }, '노트 ' + c + '개');
+      })(DIFFS[i]);
+    })();
+    p = $('lanes'); p.innerHTML = '';
+    (function () {
+      var ls = [4, 5, 6];
+      for (var i = 0; i < ls.length; i++) (function (l) {
+        opt(p, l + '줄', l === cfg.lanes, function () { cfg.lanes = l; saveCfg(); drawMenu(); }, l === 4 ? '기본' : (l === 5 ? '음높이 더 자세히' : '가장 자세히'));
+      })(ls[i]);
+    })();
+    p = $('speeds'); p.innerHTML = '';
+    (function () {
+      for (var i = 0; i < SPEEDS.length; i++) (function (s) {
+        opt(p, s.name, s.id === cfg.speed, function () { cfg.speed = s.id; saveCfg(); drawMenu(); });
+      })(SPEEDS[i]);
+    })();
+    $('offv').textContent = (cfg.off > 0 ? '+' : '') + cfg.off + ' ms';
+    var b = best[bestKey()];
+    $('best').textContent = b ? '이 곡·난이도·줄 수 최고 기록: ' + b.score + '점 (' + b.grade + ')' : '아직 기록이 없어요';
+  }
+  $('offm').onclick = function () { cfg.off -= 10; saveCfg(); drawMenu(); };
+  $('offp').onclick = function () { cfg.off += 10; saveCfg(); drawMenu(); };
+
+  // ---------- 게임 ----------
+  var cv = $('cv'), g = cv.getContext('2d');
+  var G = null, W = 0, H = 0, laneW = 0, fx0 = 0, hitY = 0, noteH = 0;
+  function now() { return (window.performance && performance.now) ? performance.now() : new Date().getTime(); }
+  function layout() {
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W; cv.height = H;
+    laneW = Math.min(Math.floor(W / (LANES + 1.5)), 150);
+    fx0 = Math.floor((W - laneW * LANES) / 2);
+    hitY = H - Math.round(H * 0.2);
+    noteH = Math.max(18, Math.round(laneW * 0.2));
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', function () { setTimeout(layout, 300); }, false);
+
+  function gtAt(pn) { return pn / 1000 - G.d - G.T0 - cfg.off / 1000; }
+  function laneColor(l) {
+    // 줄 수에 맞춰 무지개 순서로 색을 고른다
+    if (LANES === 4) return COLORS[[0, 1, 3, 4][l]];
+    if (LANES === 5) return COLORS[[0, 1, 2, 3, 4][l]];
+    return COLORS[l];
+  }
+
+  function startGame() {
+    var song = SFX.getSong(cfg.song);
+    if (!song) return;
+    LANES = cfg.lanes;
+    $('menu').style.display = 'none'; document.querySelector('.top').style.display = 'none';
+    $('game').style.display = 'block';
+    layout();
+    G = { song: song, notes: makeChart(song, cfg.diff, LANES, cfg.trk), mi: 0, T0: 0, d: 0, t: -9, counts: [0, 0, 0, 0], combo: 0, maxCombo: 0, wsum: 0, dtSum: 0, dtN: 0,
+          press: [], fx: [], hitT: -9, jtxt: '', jcol: '#fff', jlate: '', jat: -9, started: false, done: false, wait: 0, raf: 0 };
+    for (var l = 0; l < LANES; l++) G.press.push(-9);
+    if (!G.notes.length) { alert('이 곡에서 노트를 만들지 못했어요'); quit(); return; }
+    G.end = G.notes[G.notes.length - 1].t + 1.5;
+    G.speed = 560 * SPEEDS[cfg.speed].v * (H / 700);
+    waitReady();
+  }
+  function waitReady() {
+    if (!G) return;
+    if (SFX.ready() || G.wait > 60) { begin(); return; }
+    G.wait++; draw(); setTimeout(waitReady, 50);
+  }
+  function begin() {
+    var T0 = SFX.songPlay(cfg.song, 2.2);
+    if (T0 < 0) { alert('소리를 시작하지 못했어요. 한 번 더 눌러 보세요.'); quit(); return; }
+    G.T0 = T0; G.d = now() / 1000 - SFX.now(); G.started = true;
+    frame();
+  }
+  function addFx(l, j, t, miss) { if (G.fx.length > 14) G.fx.shift(); G.fx.push({ l: l, j: j, t: t, m: miss }); }
+  function frame() {
+    if (!G || !G.started) return;
+    var pn = now();
+    var s = pn / 1000 - SFX.now();
+    G.d += (s - G.d) * 0.05;
+    var t = gtAt(pn); G.t = t;
+    var N = G.notes;
+    while (G.mi < N.length && (N[G.mi].j || N[G.mi].t < t - WIN.o)) {
+      if (!N[G.mi].j) {
+        N[G.mi].j = 4; G.counts[3]++; G.combo = 0; G.jtxt = 'MISS'; G.jcol = '#888'; G.jlate = ''; G.jat = t;
+        addFx(N[G.mi].lane, 4, t, 1);
+      }
+      G.mi++;
+    }
+    draw();
+    if (t > G.end) { finish(); return; }
+    G.raf = window.requestAnimationFrame(frame);
+  }
+  function press(lane, pn) {
+    if (!G || !G.started || G.done) return;
+    var t = gtAt(pn);
+    G.press[lane] = t;
+    var N = G.notes, i, bi = -1, bd = 9, dd;
+    for (i = G.mi; i < N.length && N[i].t <= t + WIN.o; i++) {
+      if (N[i].j || N[i].lane !== lane) continue;
+      dd = Math.abs(N[i].t - t);
+      if (dd < bd) { bd = dd; bi = i; }
+    }
+    if (bi < 0 || bd > WIN.o) return;
+    var dt = t - N[bi].t; // + 는 늦게 누름
+    var j, col, w;
+    if (bd <= WIN.p) { j = 1; col = '#ffe14a'; w = 1; } else if (bd <= WIN.g) { j = 2; col = '#5ee08a'; w = 0.7; } else { j = 3; col = '#7ab8ff'; w = 0.4; }
+    N[bi].j = j; G.counts[j - 1]++; G.wsum += w;
+    G.combo++; if (G.combo > G.maxCombo) G.maxCombo = G.combo;
+    G.dtSum += dt; G.dtN++;
+    G.jtxt = j === 1 ? 'PERFECT' : (j === 2 ? 'GREAT' : 'GOOD'); G.jcol = col;
+    G.jlate = j === 1 ? '' : (dt > 0 ? '느림' : '빠름'); G.jat = t; G.hitT = t;
+    addFx(lane, j, t, 0);
+    SFX.play(j === 3 ? 'tap' : 'tapp');
+  }
+
+  // 맞췄을 때의 효과: 노트가 하얗게 커지며 터지고, 판정 색 링과 빛줄기가 퍼진다
+  function drawFx(t) {
+    var i, e, a, k, x, cx, w, h, col, r, ang, d0, s, y;
+    var keep = [];
+    for (i = 0; i < G.fx.length; i++) {
+      e = G.fx[i]; a = t - e.t;
+      if (a < 0 || a > 0.4) continue;
+      keep.push(e);
+      x = fx0 + e.l * laneW; cx = x + laneW / 2;
+      if (e.m) {
+        // 놓친 노트: 회색으로 변해 아래로 떨어지며 사라진다
+        g.globalAlpha = Math.max(0, 0.6 * (1 - a / 0.4)); g.fillStyle = '#777';
+        y = hitY + (WIN.o + a) * G.speed * 0.7;
+        g.fillRect(x + 5, y - noteH / 2, laneW - 10, noteH);
+        g.globalAlpha = 1; continue;
+      }
+      k = a / 0.3; if (k > 1) k = 1;
+      col = e.j === 1 ? '#ffe14a' : (e.j === 2 ? '#7fffa8' : '#8ec5ff');
+      // 빛줄기
+      g.fillStyle = laneColor(e.l);
+      for (s = 0; s < 5; s++) {
+        g.globalAlpha = 0.5 * (1 - k) * (1 - s / 5);
+        g.fillRect(x + 4, hitY - (s + 1) * H * 0.07, laneW - 8, H * 0.07);
+      }
+      // 노트가 커지며 터짐
+      w = (laneW - 10) * (1 + k * 0.8); h = noteH * (1 + k * 1.2);
+      g.globalAlpha = 1 - k; g.fillStyle = '#fff';
+      g.fillRect(cx - w / 2, hitY - h / 2, w, h);
+      // 링
+      r = 10 + k * laneW * 0.8;
+      g.globalAlpha = 1 - k; g.strokeStyle = col; g.lineWidth = 6 * (1 - k) + 1;
+      g.beginPath(); g.arc(cx, hitY, r, 0, 6.2832); g.stroke();
+      // 튀는 선 (판정이 좋을수록 많이)
+      var nr = e.j === 1 ? 10 : (e.j === 2 ? 8 : 5);
+      g.lineWidth = 3; g.strokeStyle = col;
+      for (s = 0; s < nr; s++) {
+        ang = s * 6.2832 / nr + 0.4; d0 = 14 + k * laneW * 0.7;
+        g.beginPath(); g.moveTo(cx + Math.cos(ang) * d0, hitY + Math.sin(ang) * d0);
+        g.lineTo(cx + Math.cos(ang) * (d0 + 16 * (1 - k)), hitY + Math.sin(ang) * (d0 + 16 * (1 - k))); g.stroke();
+      }
+      g.globalAlpha = 1;
+    }
+    G.fx = keep;
+  }
+
+  function draw() {
+    if (!G) return;
+    var t = G.t, i, x, y, l;
+    g.fillStyle = '#12141f'; g.fillRect(0, 0, W, H);
+    // 레인
+    for (l = 0; l < LANES; l++) {
+      x = fx0 + l * laneW;
+      g.fillStyle = l % 2 ? '#1a1d2e' : '#171a2a'; g.fillRect(x, 0, laneW, H);
+      var pa = t - G.press[l];
+      if (pa >= 0 && pa < 0.16) { g.globalAlpha = 0.28 * (1 - pa / 0.16); g.fillStyle = laneColor(l); g.fillRect(x, 0, laneW, H); g.globalAlpha = 1; }
+      g.fillStyle = '#2b3050'; g.fillRect(x, 0, 2, H);
+    }
+    g.fillStyle = '#2b3050'; g.fillRect(fx0 + LANES * laneW - 2, 0, 2, H);
+    // 판정선과 터치 영역 (누르면 해당 칸이 밝아진다)
+    g.fillStyle = '#0c0e18'; g.fillRect(fx0, hitY + 6, laneW * LANES, H - hitY - 6);
+    for (l = 0; l < LANES; l++) {
+      var pb = t - G.press[l], lit = (pb >= 0 && pb < 0.12);
+      g.fillStyle = laneColor(l); g.globalAlpha = lit ? 0.95 : 0.5;
+      g.fillRect(fx0 + l * laneW + 6, hitY + 14, laneW - 12, lit ? 20 : 8); g.globalAlpha = 1;
+    }
+    g.fillStyle = '#fff'; g.fillRect(fx0, hitY - 2, laneW * LANES, 5);
+    // 노트
+    var N = G.notes;
+    for (i = G.mi; i < N.length; i++) {
+      y = hitY - (N[i].t - t) * G.speed;
+      if (y < -noteH) break;
+      if (N[i].j || y > H + noteH) continue;
+      x = fx0 + N[i].lane * laneW + 5;
+      g.fillStyle = laneColor(N[i].lane); g.fillRect(x, y - noteH / 2, laneW - 10, noteH);
+      g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x, y - noteH / 2, laneW - 10, 4);
+    }
+    if (G.started) drawFx(t);
+    // 글자
+    g.textAlign = 'center';
+    var cx = fx0 + laneW * LANES / 2;
+    if (!G.started) { g.fillStyle = '#fff'; g.font = 'bold 30px sans-serif'; g.fillText('준비 중…', cx, H / 2); }
+    else if (t < -0.3) { g.fillStyle = 'rgba(255,255,255,.8)'; g.font = 'bold 34px sans-serif'; g.fillText('준비!', cx, H * 0.4); }
+    if (G.combo >= 2) {
+      var bump = 1 + 0.3 * Math.max(0, 1 - (t - G.hitT) / 0.12);
+      g.save(); g.translate(cx, H * 0.3); g.scale(bump, bump);
+      g.fillStyle = G.combo >= 50 ? '#ffe14a' : 'rgba(255,255,255,.92)'; g.font = 'bold 54px sans-serif'; g.fillText(G.combo, 0, 0);
+      g.font = 'bold 18px sans-serif'; g.fillText('COMBO', 0, 26);
+      g.restore();
+    }
+    var ja = t - G.jat;
+    if (ja >= 0 && ja < 0.5) {
+      var js = 1 + 0.35 * Math.max(0, 1 - ja / 0.08);
+      g.globalAlpha = 1 - ja / 0.5; g.fillStyle = G.jcol;
+      g.save(); g.translate(cx, hitY - 70); g.scale(js, js); g.font = 'bold 30px sans-serif'; g.fillText(G.jtxt, 0, 0); g.restore();
+      if (G.jlate) { g.font = '18px sans-serif'; g.fillText(G.jlate, cx, hitY - 44); }
+      g.globalAlpha = 1;
+    }
+    var tot = G.notes.length, done = G.counts[0] + G.counts[1] + G.counts[2] + G.counts[3];
+    g.textAlign = 'right'; g.fillStyle = '#fff'; g.font = 'bold 26px sans-serif';
+    g.fillText(Math.round(G.wsum / tot * 1000000), W - 14, 34);
+    g.font = '16px sans-serif'; g.fillStyle = '#aab';
+    g.fillText(done ? (G.wsum / done * 100).toFixed(1) + '%' : '', W - 14, 58);
+    // 진행 막대
+    g.fillStyle = '#2b3050'; g.fillRect(0, 0, W, 4);
+    g.fillStyle = '#3b6df0'; g.fillRect(0, 0, W * Math.max(0, Math.min(1, done / tot)), 4);
+  }
+
+  function gradeOf(acc) { return acc >= 0.95 ? 'S' : acc >= 0.85 ? 'A' : acc >= 0.7 ? 'B' : acc >= 0.5 ? 'C' : 'D'; }
+  function finish() {
+    G.done = true; SFX.songStop();
+    var tot = G.notes.length, acc = G.wsum / tot, score = Math.round(acc * 1000000), gr = gradeOf(acc);
+    var key = bestKey(), isBest = false;
+    if (!best[key] || best[key].score < score) { best[key] = { score: score, grade: gr }; isBest = true; try { localStorage.setItem('rhythmBest', JSON.stringify(best)); } catch (e) {} }
+    var avg = G.dtN ? Math.round(G.dtSum / G.dtN * 1000) : 0;
+    var h = '<div class="grade" style="color:' + (gr === 'S' ? '#ffe14a' : gr === 'A' ? '#5ee08a' : '#7ab8ff') + '">' + gr + '</div>';
+    h += '<div class="score">' + score + '점' + (isBest ? ' <span style="font-size:18px;color:#ffe14a">최고 기록!</span>' : '') + '</div>';
+    h += '<table><tr><td style="color:#ffe14a">PERFECT</td><td>' + G.counts[0] + '</td></tr><tr><td style="color:#5ee08a">GREAT</td><td>' + G.counts[1] + '</td></tr><tr><td style="color:#7ab8ff">GOOD</td><td>' + G.counts[2] + '</td></tr><tr><td style="color:#999">MISS</td><td>' + G.counts[3] + '</td></tr><tr><td>최대 콤보</td><td>' + G.maxCombo + '</td></tr></table>';
+    if (G.dtN >= 15) {
+      h += '<p style="font-size:16px;color:#cdd">평균 ' + Math.abs(avg) + 'ms ' + (avg > 0 ? '늦게' : '빠르게') + ' 눌렀어요 (싱크 ' + cfg.off + 'ms)</p>';
+      if (Math.abs(avg) >= 15) h += '<button class="btn gray" id="applyoff">싱크 ' + (avg > 0 ? '+' : '') + avg + 'ms 적용</button>';
+    }
+    h += '<div><button class="btn" id="again">다시</button><button class="btn gray" id="tomenu">메뉴로</button></div>';
+    $('resin').innerHTML = h; $('res').style.display = 'block';
+    $('again').onclick = function () { $('res').style.display = 'none'; quit(true); startGame(); };
+    $('tomenu').onclick = function () { $('res').style.display = 'none'; quit(); };
+    if ($('applyoff')) $('applyoff').onclick = function () { cfg.off += avg; saveCfg(); this.style.display = 'none'; };
+  }
+  function quit(keep) {
+    if (G && G.raf) window.cancelAnimationFrame(G.raf);
+    SFX.songStop();
+    G = null;
+    $('game').style.display = 'none';
+    if (!keep) { $('menu').style.display = 'block'; document.querySelector('.top').style.display = ''; drawMenu(); }
+  }
+
+  // ---------- 입력 ----------
+  function laneAt(x) { var l = Math.floor((x - fx0) / laneW); return (l >= 0 && l < LANES) ? l : -1; }
+  cv.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    var pn = now(), i, l;
+    for (i = 0; i < e.changedTouches.length; i++) { l = laneAt(e.changedTouches[i].clientX); if (l >= 0) press(l, pn); }
+  }, false);
+  $('game').addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
+  cv.addEventListener('mousedown', function (e) { var l = laneAt(e.clientX); if (l >= 0) press(l, now()); }, false);
+  var KEYS = { 83: 0, 68: 1, 70: 2, 74: 3, 75: 4, 76: 5 };
+  document.addEventListener('keydown', function (e) { if (KEYS[e.keyCode] !== undefined && !e.repeat && KEYS[e.keyCode] < LANES) press(KEYS[e.keyCode], now()); }, false);
+  $('quit').onclick = function () { quit(); };
+  $('start').onclick = startGame;
+  document.addEventListener('visibilitychange', function () { if (document.hidden && G && !G.done) quit(); }, false);
+
+  drawMenu();
+  window.RH = { makeChart: makeChart, melodyNotes: melodyNotes, trackStats: trackStats, cfg: cfg, dbg: function () { return G; } };
+})();
+</script>
+</body>
+</html>
