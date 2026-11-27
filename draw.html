@@ -52,9 +52,11 @@ a { color: inherit; text-decoration: none; }
 
 <div class="ov" id="newov"><div class="card">
   <h2>새 그림</h2>
-  <p>도화지 가로 크기 (기본 1024)</p>
+  <p>도화지 방향</p>
+  <div class="seg" id="segO"><span class="b on" data-v="portrait">세로</span><span class="b" data-v="landscape">가로</span></div>
+  <p>도화지 가로 크기 (기본 <span id="baseWTxt">768</span>)</p>
   <div class="seg" id="segW"><span class="b on" data-v="1">1배</span><span class="b" data-v="2">2배</span><span class="b" data-v="3">3배</span></div>
-  <p>도화지 세로 크기 (기본 768)</p>
+  <p>도화지 세로 크기 (기본 <span id="baseHTxt">1024</span>)</p>
   <div class="seg" id="segH"><span class="b on" data-v="1">1배</span><span class="b" data-v="2">2배</span><span class="b" data-v="3">3배</span></div>
   <p id="sizeInfo"></p>
   <p>도화지 색</p>
@@ -65,7 +67,7 @@ a { color: inherit; text-decoration: none; }
 <script>
 (function () {
   function $(i) { return document.getElementById(i); }
-  var BASEW = 1024, BASEH = 768;
+  var BASEW = 1024, BASEH = 768; // 가로(landscape) 기준 크기. 세로(portrait)는 이 값을 뒤바꿔 쓴다.
   var PAPERS = ['#ffffff', '#fff6d6', '#e6f2ff', '#ffe6ef', '#e8f7e4', '#222222'];
 
   var IDXK = '_drawIdx';
@@ -91,9 +93,11 @@ a { color: inherit; text-decoration: none; }
   }
 
   /* ---------- 새 그림 ---------- */
-  var newW = 1, newH = 1, newPaper = '#ffffff';
+  var newW = 1, newH = 1, newPaper = '#ffffff', newOrient = 'portrait';
+  function baseWH() { return newOrient === 'portrait' ? { w: BASEH, h: BASEW } : { w: BASEW, h: BASEH }; }
   function updNewInfo() {
-    var w = BASEW * newW, h = BASEH * newH, big = w * h > 3300000;
+    var b = baseWH(); $('baseWTxt').textContent = b.w; $('baseHTxt').textContent = b.h;
+    var w = b.w * newW, h = b.h * newH, big = w * h > 3300000;
     $('sizeInfo').innerHTML = '도화지 크기 <b>' + w + ' × ' + h + '</b>' + (big ? ' <span style="color:#c33">— 크면 이 아이패드에서는 조금 느려질 수 있어요</span>' : '');
   }
   function buildPapers() {
@@ -163,13 +167,19 @@ a { color: inherit; text-decoration: none; }
       t = t.parentNode;
     }
     if (pp) { newPaper = pp.getAttribute('data-p'); buildPapers(); return; }
-    var seg = e.target; while (seg && seg !== document.body && !(seg.parentNode && (seg.parentNode.id === 'segW' || seg.parentNode.id === 'segH'))) seg = seg.parentNode;
-    if (seg && seg !== document.body) { var v = +seg.getAttribute('data-v'); if (seg.parentNode.id === 'segW') { newW = v; segSet('segW', v); } else { newH = v; segSet('segH', v); } updNewInfo(); return; }
+    var seg = e.target; while (seg && seg !== document.body && !(seg.parentNode && (seg.parentNode.id === 'segW' || seg.parentNode.id === 'segH' || seg.parentNode.id === 'segO'))) seg = seg.parentNode;
+    if (seg && seg !== document.body) {
+      var pid = seg.parentNode.id, dv = seg.getAttribute('data-v');
+      if (pid === 'segW') { newW = +dv; segSet('segW', newW); }
+      else if (pid === 'segH') { newH = +dv; segSet('segH', newH); }
+      else { newOrient = dv; segSet('segO', newOrient); }
+      updNewInfo(); return;
+    }
     if (!act) return;
     var k = act.getAttribute('data-act');
-    if (k === 'newdlg') { newW = 1; newH = 1; newPaper = '#ffffff'; segSet('segW', 1); segSet('segH', 1); buildPapers(); updNewInfo(); $('newov').style.display = 'block'; }
+    if (k === 'newdlg') { newW = 1; newH = 1; newPaper = '#ffffff'; newOrient = 'portrait'; segSet('segW', 1); segSet('segH', 1); segSet('segO', 'portrait'); buildPapers(); updNewInfo(); $('newov').style.display = 'block'; }
     else if (k === 'newcancel') $('newov').style.display = 'none';
-    else if (k === 'newgo') { $('newov').style.display = 'none'; location.href = 'drawpad.html?new=1&w=' + (BASEW * newW) + '&h=' + (BASEH * newH) + '&paper=' + encodeURIComponent(newPaper); }
+    else if (k === 'newgo') { $('newov').style.display = 'none'; var b = baseWH(); location.href = 'drawpad.html?new=1&w=' + (b.w * newW) + '&h=' + (b.h * newH) + '&paper=' + encodeURIComponent(newPaper); }
     else if (k === 'open') location.href = 'drawpad.html?id=' + act.getAttribute('data-id');
     else if (k === 'del') delDoc(act.getAttribute('data-id'));
     else if (k === 'pcdlg') openPC();
