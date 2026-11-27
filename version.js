@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.7';
-window.APP_VERSION_NOTE = '그림판: 작품 목록(draw.html)과 실제 캔버스(drawpad.html)를 별도 페이지로 분리, 되돌리기 조각 저장을 아예 없애고 다시 그리기 방식으로 전환 — 메모리 절약';
+window.APP_VERSION = '0.5.8';
+window.APP_VERSION_NOTE = '그림판: 작품 목록 페이지에서 아무 버튼도 안 눌리던 버그 — body에 cursor:pointer 빠뜨려서 iOS가 터치를 클릭으로 안 바꿔줬던 것 고침';
 window.APP_VERSION_DATE = '2026-11-27';
