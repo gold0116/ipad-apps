@@ -949,7 +949,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
       localStorage.setItem(LOGK, JSON.stringify({
         id: doc.id, running: !!running, startedAt: stressCfg.startedAt, lastCheckpointAt: +new Date(),
         strokeCount: stressCfg.count, totalPoints: stressCfg.points, crashes: stressCfg.crashes,
-        saveMode: stressCfg.noSave ? 'off' : 'on', w: W, h: H, ptsPerStroke: stressCfg.pts, gapMs: stressCfg.gap,
+        saveMode: stressCfg.noSave ? 'off' : 'on', w: W, h: H, ptsPerStroke: stressCfg.pts, gapMs: stressCfg.gap, pointGapMs: stressCfg.pointGap,
         note: note || ''
       }));
     } catch (e) {}
@@ -969,33 +969,49 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     }
     stressBox.childNodes[0].nodeValue = text;
   }
-  function synthStroke(nPts) {
-    var ang = Math.random() * 6.2832, x = Math.random() * W, y = Math.random() * H, q = [], i;
+  // 획 하나를 한 번에 통째로 그리면(예전 방식) 화면 갱신(markFull)도 획당
+  // 1번만 일어나서 실제 손가락 그리기와 다름 — 실제로는 touchmove
+  // 이벤트마다(초당 수십 번) 매번 캔버스→캔버스 복사(paintView의
+  // drawImage)가 일어나는데, 느리고 긴 곡선 하나가 그 복사를 수백 번
+  // 유발함. 그래서 beginPending/strokeMove/endStroke(실제 터치 처리 함수
+  // 그 자체)를 점 하나씩, 한 번에 한 틱(pointGap)만큼만 불러서 실제
+  // touchmove 빈도를 그대로 흉내낸다.
+  var stressPath = null, stressPathIdx = 0;
+  function stressGenPath(nPts) {
+    var ang = Math.random() * 6.2832, x = Math.random() * vw, y = Math.random() * vh, pts = [], i;
     for (i = 0; i < nPts; i++) {
-      x += Math.cos(ang) * 6 + (Math.random() - 0.5) * 4; y += Math.sin(ang) * 6 + (Math.random() - 0.5) * 4;
-      if (x < 0 || x > W || y < 0 || y > H) ang = Math.random() * 6.2832;
-      x = Math.max(0, Math.min(W, x)); y = Math.max(0, Math.min(H, y));
-      q.push(r1(x), r1(y));
+      x += Math.cos(ang) * 4 + (Math.random() - 0.5) * 3; y += Math.sin(ang) * 4 + (Math.random() - 0.5) * 3;
+      if (x < 0 || x > vw || y < 0 || y > vh) ang = Math.random() * 6.2832;
+      x = Math.max(0, Math.min(vw, x)); y = Math.max(0, Math.min(vh, y));
+      pts.push({ x: x, y: y });
     }
-    var op = { k: 's', p: 'pen', c: '#000000', w: 6, a: 1, t: ts(), d: 0, s: Math.floor(Math.random() * 1000000), q: q };
-    var sst = new Stroker(op, doc.paper);
-    sst.upTo(dctx, nPts, true);
-    op.d = Math.max(0, ts() - op.t);
-    markFull();
-    commitOp(op);
+    return pts;
   }
   function stressStep() {
     var t0 = +new Date();
-    try { synthStroke(stressCfg.pts); }
-    catch (e) { stressWriteLog(false, '오류로 중단: ' + String(e.message || e)); stressOverlay('한계 테스트 오류로 중단: ' + String(e.message || e)); return; }
-    var ms = +new Date() - t0, i, avg = 0;
-    stressRecent.push(ms); if (stressRecent.length > 10) stressRecent.shift();
-    for (i = 0; i < stressRecent.length; i++) avg += stressRecent[i]; avg = Math.round(avg / stressRecent.length);
-    stressCfg.count++; stressCfg.points += stressCfg.pts;
-    stressWriteLog(true);
-    stressOverlay('한계 테스트 중 — 누적 ' + stressCfg.count + '획 / ' + stressCfg.points + '점 / 크래시 ' + stressCfg.crashes + '회 / 최근 평균 ' + avg + 'ms (저장:' + (stressCfg.noSave ? '끔' : '켬') + ')');
-    if (stressCfg.max && stressCfg.count >= stressCfg.max) { stressStop('설정한 개수(' + stressCfg.max + '획)에 도달'); return; }
-    stressTimer = setTimeout(stressStep, stressCfg.gap);
+    try {
+      if (!stressPath) {
+        stressPath = stressGenPath(stressCfg.pts); stressPathIdx = 1;
+        beginPending(stressPath[0]);
+      } else if (stressPathIdx < stressPath.length) {
+        strokeMove(stressPath[stressPathIdx]); stressPathIdx++;
+      } else {
+        endStroke();
+        var ms = +new Date() - t0, i, avg = 0;
+        stressRecent.push(ms); if (stressRecent.length > 10) stressRecent.shift();
+        for (i = 0; i < stressRecent.length; i++) avg += stressRecent[i]; avg = Math.round(avg / stressRecent.length);
+        stressCfg.count++; stressCfg.points += stressCfg.pts;
+        stressWriteLog(true);
+        stressOverlay('한계 테스트 중 — 누적 ' + stressCfg.count + '획 / ' + stressCfg.points + '점 / 크래시 ' + stressCfg.crashes + '회 / 획당 ' + avg + 'ms (저장:' + (stressCfg.noSave ? '끔' : '켬') + ')');
+        stressPath = null;
+        if (stressCfg.max && stressCfg.count >= stressCfg.max) { stressStop('설정한 개수(' + stressCfg.max + '획)에 도달'); return; }
+        stressTimer = setTimeout(stressStep, stressCfg.gap);
+        return;
+      }
+    } catch (e) {
+      stressWriteLog(false, '오류로 중단: ' + String(e.message || e)); stressOverlay('한계 테스트 오류로 중단: ' + String(e.message || e)); return;
+    }
+    stressTimer = setTimeout(stressStep, stressCfg.pointGap);
   }
   function stressStop(reason) {
     clearTimeout(stressTimer); stressTimer = 0; stressNoSave = false;
@@ -1011,6 +1027,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     stressCfg = {
       pts: Math.max(2, Math.min(2000, parseInt(qs.stressPts, 10) || 40)),
       gap: Math.max(0, Math.min(5000, parseInt(qs.stressGap, 10) || 250)),
+      pointGap: Math.max(0, Math.min(500, parseInt(qs.stressPointGap, 10) || 16)),
       max: Math.max(0, parseInt(qs.stressMax, 10) || 0),
       noSave: qs.stressSave === '0',
       count: count, points: points, crashes: crashes, startedAt: startedAt
@@ -1050,6 +1067,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
           '&stressSave=' + (qs.stressSave || '1') +
           '&stressGap=' + (qs.stressGap || '250') +
           '&stressPts=' + (qs.stressPts || '40') +
+          '&stressPointGap=' + (qs.stressPointGap || '16') +
           (qs.stressMax ? '&stressMax=' + encodeURIComponent(qs.stressMax) : ''));
         return;
       }

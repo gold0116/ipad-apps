@@ -209,19 +209,23 @@
   </script>
 
   <h2>그림판 한계 테스트</h2>
-  <p style="font-size:14px;color:#666">그림판이 실제로 "손으로 계속 그리는 것"과 똑같은 방식으로 획을 자동으로
-  계속 그어가며 몇 획까지 버티는지 재요. 메모리 부족으로 페이지가
-  새로고침돼도(크래시) 마지막 기록이 남아있어서, 다시 이 페이지로 돌아와
-  "마지막 결과"를 보면 어디서 멈췄는지 알 수 있어요. 켜 두고 다른 일을
-  보다가 나중에 와서 확인해도 돼요(새로고침되면 테스트가 자동으로 이어짐).
-  </p>
+  <p style="font-size:14px;color:#666">그림판이 실제로 "손으로 한 점 한 점 이어서 그리는 것"과 똑같은 방식으로
+  —한 획을 통째로 한 번에 그리는 게 아니라, 점 하나씩 touchmove처럼
+  화면을 매번 다시 그리면서— 획을 자동으로 계속 그어가며 몇 획까지
+  버티는지 재요. 메모리 부족으로 페이지가 새로고침돼도(크래시) 마지막
+  기록이 남아있어서, 다시 이 페이지로 돌아와 "마지막 결과"를 보면 어디서
+  멈췄는지 알 수 있어요. 켜 두고 다른 일을 보다가 나중에 와서 확인해도
+  돼요(새로고침되면 테스트가 자동으로 이어짐). 캔버스가 까맣게 변하거나
+  이상해지면(크래시와는 다른 증상) 디버그 페이지로 돌아오지 말고 그 화면
+  왼쪽 위 빨간 줄의 "그만"을 눌러서 그 순간의 기록을 남기세요.</p>
   <div class="row">
     <div class="lb">설정</div>
     <div style="font-size:14px;line-height:2">
       자동 저장: <select id="stCfgSave"><option value="1">켬(평소처럼)</option><option value="0">끔(저장 비용만 떼어서 테스트)</option></select><br>
-      획 하나당 점 개수: <input type="number" id="stCfgPts" value="40" style="width:70px"> 개
-      · 획 사이 간격: <input type="number" id="stCfgGap" value="200" style="width:70px"> ms<br>
-      최대 획수(0=끝까지): <input type="number" id="stCfgMax" value="0" style="width:90px"> 획
+      획 하나당 점 개수: <input type="number" id="stCfgPts" value="150" style="width:70px"> 개
+      · 점 사이 간격(실제 손가락 touchmove 흉내): <input type="number" id="stCfgPointGap" value="16" style="width:70px"> ms<br>
+      획 사이 간격(손 뗐다가 다시 짚는 시간 흉내): <input type="number" id="stCfgGap" value="200" style="width:70px"> ms
+      · 최대 획수(0=끝까지): <input type="number" id="stCfgMax" value="0" style="width:90px"> 획
     </div>
     <div style="margin-top:8px">
       <button class="btn" id="stStart">새 테스트 시작</button>
@@ -254,7 +258,7 @@
         ['크래시(새로고침) 횟수', lg.crashes + '회'],
         ['자동 저장', lg.saveMode === 'off' ? '끔' : '켬'],
         ['도화지 크기', lg.w + ' × ' + lg.h],
-        ['획당 점 개수 / 간격', lg.ptsPerStroke + '개 / ' + lg.gapMs + 'ms'],
+        ['획당 점 개수 / 점 간격 / 획 간격', lg.ptsPerStroke + '개 / ' + (lg.pointGapMs != null ? lg.pointGapMs : '?') + 'ms / ' + lg.gapMs + 'ms'],
         ['시작 시각', fmtT(lg.startedAt)],
         ['마지막 기록 시각', fmtT(lg.lastCheckpointAt) + ' (' + ago + '초 전)'],
         ['그림 id', lg.id]
@@ -263,13 +267,14 @@
       $('stResult').innerHTML = h;
     }
     $('stStart').addEventListener('click', function () {
-      var pts = Math.max(2, Math.min(2000, +$('stCfgPts').value || 40));
+      var pts = Math.max(2, Math.min(2000, +$('stCfgPts').value || 150));
+      var pointGap = Math.max(0, Math.min(500, +$('stCfgPointGap').value || 16));
       var gap = Math.max(0, Math.min(5000, +$('stCfgGap').value || 200));
       var max = Math.max(0, +$('stCfgMax').value || 0);
       var save = $('stCfgSave').value;
       try { localStorage.removeItem('_drawStressLog'); } catch (e) {}
       location.href = 'drawpad.html?stress=1&new=1&w=1024&h=768&paper=%23ffffff' +
-        '&stressSave=' + save + '&stressGap=' + gap + '&stressPts=' + pts + (max ? '&stressMax=' + max : '');
+        '&stressSave=' + save + '&stressGap=' + gap + '&stressPointGap=' + pointGap + '&stressPts=' + pts + (max ? '&stressMax=' + max : '');
     });
     $('stRefresh').addEventListener('click', render);
     $('stClear').addEventListener('click', function () {
