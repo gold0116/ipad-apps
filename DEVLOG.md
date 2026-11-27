@@ -3,6 +3,30 @@
 > 다음 세션 시작할 때 이 문서부터 읽으면 맥락 복구에 도움 됩니다.
 > 지켜야 할 "규칙"은 여기가 아니라 `CLAUDE.md`에 있습니다.
 
+## 2026-11-27 세션 요약 (Firebase 백업: 400 에러 원인 확정 — localStorage 키의 '.' 때문)
+
+사용자가 에러 본문까지 보고 알려줌: `{"error":"Invalid data; couldn't
+parse key beginning at 1:201. Key value can't be empty or contain $ # []
+or ."}`. 바로 전 세션에서 의심했던 "레거시 Secret 지원 중단" 때문이 아니라
+(그 추측은 틀렸음), **백업 데이터 안의 localStorage 키 이름 자체에 Firebase가
+금지하는 문자(`. $ # [ ] /`)가 들어있어서 데이터 전체가 거부**된 것으로
+확정. `sound.js`의 `attachBgm()`이 `'bgm:' + 파일명`(예: `bgm:snake.html`)
+형태로 배경음 선택을 저장해 둬서, 그 `.html`의 점(.)이 범인.
+
+- 고침: `backup.html`에 `fbEncodeKey`/`fbDecodeKey`(금지 문자를 `~16진수
+  두자리`로 가역적으로 바꿈)를 추가해서, **Firebase로 보내고 받을 때만**
+  백업 데이터의 키 이름에 적용(`fbEncodeBackupText`/`fbDecodeBackupText`).
+  텍스트 백업("백업 텍스트 만들기")이나 노트북 서버 쪽은 이 제약이 아예
+  없어서 그대로 두고 안 건드림 — Firebase REST 경로에만 국한된 수정.
+- 검증: Playwright + 가짜 Firebase 서버(이번엔 실제처럼 `data`의 키에
+  금지 문자가 있으면 400으로 거부하도록 흉내)로, `bgm:snake.html` 키가
+  있어도 업로드가 성공하고, 불러오기 후 "복원하기"까지 눌러서 그 키가
+  정확히 원래 이름(`bgm:snake.html`)과 값으로 복원되는 것까지 끝까지
+  확인(라운드트립 정확성 포함). 메모 데이터도 같이 정상 왕복.
+- app.appcache v104→v105, version.js 0.4.27→0.4.28. **아직 실기(사용자
+  기기) 확인 대기** — 이번엔 원인이 명확해서 될 가능성이 높지만, 다시
+  시도해서 성공하는지 확인 필요.
+
 ## 2026-11-27 세션 요약 (Firebase 백업: 400 에러 — 에러 본문 노출로 원인 조사 중)
 
 사용자: 실기(iPad 2는 아니고 또는 다른 기기)에서 "Firebase로 백업 올리기"를

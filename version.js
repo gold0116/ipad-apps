@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.27';
-window.APP_VERSION_NOTE = 'Firebase 백업: 실패 시 상태 번호만 보이던 걸 Firebase가 실제로 돌려준 에러 본문까지 보이게 함(원인 파악용)';
+window.APP_VERSION = '0.4.28';
+window.APP_VERSION_NOTE = 'Firebase 백업: bgm:snake.html처럼 .이 든 localStorage 키가 있으면 통째로 거부되던 400 에러 고침(보낼 때만 안전하게 바꿔서 전송)';
 window.APP_VERSION_DATE = '2026-11-27';

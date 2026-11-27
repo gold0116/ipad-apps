@@ -205,6 +205,30 @@
   var FB_PATH = 'ipadAppsBackup';
   try { $('fbUrl').value = localStorage.getItem('fbUrl') || ''; } catch (e) {}
   try { $('fbSecret').value = localStorage.getItem('fbSecret') || ''; } catch (e) {}
+  // Firebase Realtime Database는 JSON 키 이름에 . $ # [ ] / 를 못 쓴다(그 문자를
+  // 경로 구분자로 쓰기 때문) — 그런데 sound.js의 배경음 설정이 'bgm:snake.html'처럼
+  // .html이 들어간 키로 저장돼 있어서(실기에서 "Invalid data; couldn't parse key"
+  // 400 에러로 확인됨), 백업 데이터를 그대로 올리면 거부됨. 텍스트 백업/노트북
+  // 서버 쪽은 이 제약이 없어서 그대로 두고, Firebase로 보내고 받을 때만 금지
+  // 문자를 ~16진수 두 자리로 바꿔서(가역적으로) 피해 간다.
+  function fbEncodeKey(k) {
+    return k.replace(/[~.$#\[\]\/]/g, function (c) { return '~' + ('0' + c.charCodeAt(0).toString(16)).slice(-2); });
+  }
+  function fbDecodeKey(k) {
+    return k.replace(/~([0-9a-f]{2})/gi, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
+  }
+  function fbEncodeBackupText(text) {
+    var o = JSON.parse(text), enc = {}, k;
+    for (k in o.data) if (o.data.hasOwnProperty(k)) enc[fbEncodeKey(k)] = o.data[k];
+    o.data = enc;
+    return JSON.stringify(o);
+  }
+  function fbDecodeBackupText(text) {
+    var o = JSON.parse(text), dec = {}, k;
+    for (k in o.data) if (o.data.hasOwnProperty(k)) dec[fbDecodeKey(k)] = o.data[k];
+    o.data = dec;
+    return JSON.stringify(o);
+  }
   function fbTarget() {
     var u = $('fbUrl').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
     var secret = $('fbSecret').value.replace(/^\s+|\s+$/g, '');
@@ -225,7 +249,7 @@
       else say('msg4', '업로드 실패 (상태 ' + x.status + '): ' + String(x.responseText || '').substr(0, 200), 'warn');
     };
     x.onerror = function () { say('msg4', '업로드 실패 — 인터넷 연결이나 주소를 확인하세요', 'warn'); };
-    try { x.send(makeBackup()); } catch (e) { say('msg4', '업로드 실패: ' + String(e.message || e), 'warn'); }
+    try { x.send(fbEncodeBackupText(makeBackup())); } catch (e) { say('msg4', '업로드 실패: ' + String(e.message || e), 'warn'); }
   };
   $('fromFb').onclick = function () {
     var t = fbTarget(); if (!t) return;
@@ -236,9 +260,11 @@
       if (x.readyState !== 4) return;
       if (x.status < 200 || x.status >= 300) { say('msg4', '다운로드 실패 (상태 ' + x.status + '): ' + String(x.responseText || '').substr(0, 200), 'warn'); return; }
       if (!x.responseText || x.responseText === 'null') { say('msg4', 'Firebase에 올려둔 백업이 아직 없어요', 'warn'); return; }
-      var o = parseBackup(x.responseText);
+      var decoded;
+      try { decoded = fbDecodeBackupText(x.responseText); } catch (e) { say('msg4', 'Firebase에서 가져온 데이터가 올바르지 않아요', 'warn'); return; }
+      var o = parseBackup(decoded);
       if (!o) { say('msg4', 'Firebase에서 가져온 데이터가 올바르지 않아요', 'warn'); return; }
-      setPending(x.responseText);
+      setPending(decoded);
       var keys = 0; for (var kk in o.data) keys++;
       say('msg4', 'Firebase에서 불러왔어요 (' + String(o.date || '').substr(0, 24) + ', 항목 ' + keys + '개). 아래 3번에서 복원 방식을 고르고 복원하기를 누르세요.', 'ok');
       window.scrollTo(0, $('inp').offsetTop - 80);
