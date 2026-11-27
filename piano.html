@@ -86,6 +86,11 @@
   <ul id="list"></ul>
   <p id="empty" style="color:#888;font-size:15px;display:none">저장된 멜로디가 없어요. 위에서 녹음해보세요.</p>
 
+  <h2>내 음악에서 가져와 자동연주</h2>
+  <p style="color:#666;font-size:14px;line-height:1.5">"내 음악"에 저장한 곡을 위에서 고른 악기(더블링·에코 설정도 그대로)로 들어볼 수 있어요.</p>
+  <ul id="myMusicList"></ul>
+  <p id="myMusicEmpty" style="color:#888;font-size:15px;display:none">"내 음악"에 저장된 곡이 없어요.</p>
+
   <h2>효과음 모음(버블 슈터 참고)</h2>
   <p style="color:#666;font-size:14px;line-height:1.5">참고했던 게임 저장소(panthitech/BubbleShooter)에 실제로 들어있던 효과음이에요. 눌러서 들어보고, 아래 "효과음 교체"에서 멜로디 대신 골라 게임 소리로 쓸 수 있어요.</p>
   <ul id="clipList" style="list-style:none;margin:0;padding:0"></ul>
@@ -501,6 +506,38 @@
     }
   }
 
+  // ---- "내 음악"에 저장된 곡을 가져와 지금 악기로 자동연주 ----
+  // "내 음악" 쪽은 곡을 [박, MIDI, 길이(박)] 배열 + BPM으로 저장하는데
+  // (sound.js의 buildSong과 같은 원본 형식), 피아노의 autoPlay/playMelody는
+  // 이미 초 단위로 바뀐 {t,midi,dur} 객체 배열을 받으므로 여기서 박→초로
+  // 바꿔주기만 하면 됨. "내 음악" 쪽엔 악기 개념이 없어서, 재생 순간
+  // 피아노 페이지에서 고른 악기/더블링/에코를 그대로 입혀서 재생한다.
+  function myMusicToObj(raw) {
+    var bpm = raw.bpm || 120, sp = 60 / bpm, notes = [], i, n;
+    for (i = 0; i < raw.notes.length; i++) {
+      n = raw.notes[i];
+      notes.push({ t: n[0] * sp, midi: n[1], dur: Math.max(0.05, n[2] * sp) });
+    }
+    return { instrument: instrument, doubling: doubling, echo: echoOn, notes: notes };
+  }
+  function renderMyMusicList() {
+    var ul = $('myMusicList'), mList = [];
+    try { mList = JSON.parse(localStorage.getItem('mymusic-list-v1') || '[]'); } catch (e) {}
+    ul.innerHTML = '';
+    $('myMusicEmpty').style.display = mList.length ? 'none' : 'block';
+    for (var i = 0; i < mList.length; i++) (function (s) {
+      var li = document.createElement('li');
+      var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = s.name;
+      var sub = document.createElement('div'); sub.className = 'sub'; sub.textContent = '음 ' + s.count + '개 · ' + fmt(s.seconds);
+      var bp = document.createElement('button'); bp.className = 'btn'; bp.textContent = '재생';
+      bp.onclick = function () {
+        if (autoBtn === bp) { stopAutoPlay(); return; }
+        try { autoPlay(myMusicToObj(JSON.parse(s.text)), bp); } catch (e) {}
+      };
+      li.appendChild(nm); li.appendChild(sub); li.appendChild(bp); ul.appendChild(li);
+    })(mList[i]);
+  }
+
   // ---- 효과음 모음(버블 슈터 참고) ----
   // SFX.clips()가 반환하는 목록은 sound.js에 고정으로 박혀있는 번들 에셋이라
   // (사용자가 추가/삭제하는 "저장된 멜로디"와 달리) 그냥 한 번만 그리면 됨.
@@ -525,7 +562,7 @@
     sel.appendChild(grp);
   }
 
-  buildPiano(); load(); seedCanonPiano(); render(); renderClipList();
+  buildPiano(); load(); seedCanonPiano(); render(); renderClipList(); renderMyMusicList();
   // 처음 열면 4옥타브(도레미파솔라시도를 치기 좋은 가운데쯤)가 왼쪽에 오도록
   $('pianoScroll').scrollLeft = (4 - OCT_MIN) * 7 * keyW();
 })();

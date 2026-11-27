@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.1';
-window.APP_VERSION_NOTE = '내 음악: 재생 악기를 피아노 등 고음질 WebAudioFont 샘플로 바꿀 수 있는 선택칸 추가';
+window.APP_VERSION = '0.5.2';
+window.APP_VERSION_NOTE = '피아노: "내 음악"에 저장한 곡을 가져와 지금 고른 악기로 자동연주(건반 하이라이트 포함)할 수 있는 목록 추가';
 window.APP_VERSION_DATE = '2026-11-27';
