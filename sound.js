@@ -31,6 +31,25 @@
 
   // ---- 배경음악: 러시아 민요 「코로베이니키」(공개 도메인)를 코드로 연주 ----
   var wanted = false, playing = false, musicMuted = false, mTimer = null, mGain = null;
+  // "내 음악"에서 곡을 WebAudioFont 고음질 샘플(피아노 등)로 듣고 싶다는 요청으로
+  // 추가 — 배경음악 엔진(mtone/schedule)은 그대로 두고, 실제로 소리를 내는 부분만
+  // 선택한 악기가 있으면 그쪽으로 돌린다. null이면(기본) 예전 그대로 사각파/삼각파.
+  // bgInstBus는 mGain(음소거/곡 전환마다 새로 만들어짐)에 매번 다시 연결해 주는
+  // 고정된 중계 버스 — WebAudioFontPlayer의 envelope 재사용 풀이 target(=이 버스)이
+  // 똑같아야 작동하므로, mGain처럼 매번 새로 만들면 재사용이 안 돼 노드가 계속 쌓임.
+  var bgInstrument = null, bgInstBus = null;
+  function ensureBgInstBus() {
+    if (!bgInstBus) bgInstBus = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
+    return bgInstBus;
+  }
+  // mGain은 곡/음소거가 바뀔 때마다 새로 만들어지므로, bgInstBus를 "지금의" mGain에
+  // 다시 이어 준다 — startMusic()이 새 mGain을 만들 때, 그리고 곡이 이미 재생 중인
+  // 상태에서 사용자가 악기를 바꿀 때 둘 다에서 호출.
+  function reconnectBgInstBus() {
+    if (!ctx || !mGain) return;
+    try { ensureBgInstBus().disconnect(); } catch (e) {}
+    try { ensureBgInstBus().connect(mGain); } catch (e) {}
+  }
   var evIdx = 0, loopN = 0, lastT = 0, lastBeat = 0, tempo = 1, SONG_BEATS = 48, BEAT = 0.4;
   var loopOn = true, ended = false, endAt = 0, endCb = null, curScale = 1;
   try { musicMuted = localStorage.getItem('musicMuted') === '1'; } catch (e) {}
@@ -114,7 +133,23 @@
     halt(); wanted = false; evIdx = 0; loopN = 0; ended = false;
     if (endCb) { try { endCb(); } catch (e) {} }
   }
+  // 사각파/삼각파 오실레이터의 음량 단위(0.028~0.09)는 WebAudioFont 샘플
+  // 재생(queueWaveTable)에는 너무 작아서(그쪽은 보통 0.2~0.6대를 씀) 그대로
+  // 쓰면 거의 안 들림 — 상대 음량 비율(베이스>멜로디>반주)은 그대로 두고
+  // 전체만 이 배율만큼 키운다.
+  var WAF_BG_VOL_SCALE = 6;
   function mtone(f, dur, type, vol, when) {
+    if (bgInstrument) {
+      try {
+        wafEnsureInstrument(bgInstrument);
+        var preset = wafPresetFor(bgInstrument);
+        if (preset) {
+          var midi = 69 + 12 * Math.log(f / 440) / Math.LN2;
+          wafPlayer.queueWaveTable(ctx, ensureBgInstBus(), preset, when, midi, dur, vol * WAF_BG_VOL_SCALE);
+          return;
+        }
+      } catch (e) {}
+    }
     try {
       var o = ctx.createOscillator(), g = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
       o.type = type; o.frequency.value = f;
@@ -151,6 +186,7 @@
     if (restart) { evIdx = 0; loopN = 0; ended = false; }
     mGain = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
     mGain.gain.value = (muted || musicMuted) ? 0 : curScale; mGain.connect(ctx.destination);
+    if (bgInstrument) reconnectBgInstBus();
     playing = true; lastT = ctx.currentTime + (lead || 0.15); lastBeat = EV[evIdx].t + loopN * SONG_BEATS;
     // 0박이 울리는 오디오 시각 (박 b의 시각 = songT0 + b * 박 길이)
     songT0 = lastT - lastBeat * (BEAT / tempo);
@@ -820,7 +856,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 48,
+    version: 49,
     // ---- 리듬 게임 / MIDI 미리 듣기용 곡 시계 ----
     now: function () { return ctx ? ctx.currentTime : -1; },
     ready: function () { return !!ctx && (!ctx.state || ctx.state === 'running'); },
@@ -867,7 +903,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 48, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 49, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
@@ -885,6 +921,13 @@
     },
     musicStop: function (reset) { wanted = false; halt(); if (reset) { evIdx = 0; loopN = 0; } },
     setTempo: function (m) { tempo = m; },
+    // "내 음악" 재생을 고음질 WebAudioFont 악기(피아노 등)로 — id를 WAF_INSTRUMENTS에
+    // 있는 값으로 주면 그 악기로, null/빈 값이면 원래 사각파/삼각파로 돌아감.
+    setMusicInstrument: function (id) {
+      bgInstrument = (id && WAF_INSTRUMENTS[id]) ? id : null;
+      if (bgInstrument) { wafEnsureInstrument(bgInstrument); reconnectBgInstBus(); }
+    },
+    getMusicInstrument: function () { return bgInstrument; },
     isMusicMuted: function () { return musicMuted; },
     setMusicMuted: function (v) {
       musicMuted = !!v; try { localStorage.setItem('musicMuted', musicMuted ? '1' : '0'); } catch (e) {}

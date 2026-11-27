@@ -34,6 +34,10 @@
       &nbsp; 속도 <select id="spd"><option value="0.6">0.6×</option><option value="0.8">0.8×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option></select>
       <button class="btn red" id="stop" style="padding:8px 16px;font-size:15px;margin-left:8px">정지</button>
     </div>
+    <div class="row">
+      악기 <select id="inst"></select>
+      <span id="instStat" style="font-size:13px;color:#888;margin-left:6px"></span>
+    </div>
     <div id="hint" style="font-size:13px;color:#888"></div>
   </div>
 
@@ -54,7 +58,8 @@
 
   <p style="font-size:13px;color:#888;margin-top:16px">곡은 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요). 저장한 곡은 <b>테트리스</b>의 배경음으로도 고를 수 있어요. 소리가 안 나면 화면 오른쪽 위 "소리 켜짐"을 확인하세요.</p>
 </div>
-<script src="sound.js?v=48"></script>
+<script src="sound.js?v=49"></script>
+<script src="vendor/webaudiofont/WebAudioFontPlayer.js?v=1"></script>
 <script>
 (function () {
   var KEY = 'mymusic-list-v1';
@@ -136,6 +141,34 @@
   $('loop').onchange = function () { SFX.setLoop(this.checked); };
   $('spd').onchange = function () { SFX.setTempo(parseFloat(this.value)); };
   SFX.onMusicEnd(function () { playingId = null; $('now').textContent = '재생할 곡을 고르세요'; render(); });
+
+  // ---- 악기: 기본값(사각파/삼각파로 3성부 연주)이 아니라, 피아노 페이지의
+  // 고음질 WebAudioFont 샘플로 들을 수 있게 — "내 음악의 노래를 피아노로
+  // 연주하고 싶다"는 요청. 전체 22개 악기 중 실제 녹음 샘플이 있는(hq) 것만
+  // 보여줌 — 오실레이터 악기는 schedule()의 look-ahead 스케줄링과 안 맞아서
+  // (한 번에 하나씩만 즉시 울리는 구조라) 이 경로에서는 지원하지 않음.
+  var INST_KEY = 'mymusicInstrument';
+  (function initInst() {
+    var sel = $('inst'), ins = SFX.instruments(), i, o, saved = '';
+    o = document.createElement('option'); o.value = ''; o.textContent = '기본 소리(사각파)'; sel.appendChild(o);
+    for (i = 0; i < ins.length; i++) {
+      if (!ins[i].hq) continue;
+      o = document.createElement('option'); o.value = ins[i].id; o.textContent = ins[i].label + ' (고음질)'; sel.appendChild(o);
+    }
+    try { saved = localStorage.getItem(INST_KEY) || ''; } catch (e) {}
+    for (i = 0; i < sel.options.length; i++) if (sel.options[i].value === saved) sel.value = saved;
+    SFX.setMusicInstrument(sel.value || null);
+    sel.onchange = function () {
+      try { localStorage.setItem(INST_KEY, sel.value); } catch (e) {}
+      SFX.setMusicInstrument(sel.value || null);
+    };
+    setInterval(function () {
+      var id = SFX.getMusicInstrument();
+      if (!id) { $('instStat').textContent = ''; return; }
+      var s = SFX.instrumentSampleStatus(id);
+      $('instStat').textContent = s === 'loading' ? '고음질 음색 불러오는 중…(그동안은 기본 소리)' : '';
+    }, 400);
+  })();
 
   $('try').onclick = function () {
     var p = parseText($('tx').value);

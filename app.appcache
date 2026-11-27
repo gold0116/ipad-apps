@@ -1,9 +1,9 @@
 CACHE MANIFEST
-# v108 2026-11-27
+# v109 2026-11-27
 
 version.js?v=1
 emoji.js?v=16
-sound.js?v=48
+sound.js?v=49
 touchfx.js?v=3
 vfx.js?v=2
 vendor/webaudiofont/WebAudioFontPlayer.js?v=1

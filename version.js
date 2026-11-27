@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.0';
-window.APP_VERSION_NOTE = '리듬 게임 추가(낙하 노트, 멜로디 자동 채보, 4·5·6줄, 타격 효과, 싱크 보정) + MIDI 변환에 미리 듣기 추가, 드럼 음 제외·파트 정보 저장';
+window.APP_VERSION = '0.5.1';
+window.APP_VERSION_NOTE = '내 음악: 재생 악기를 피아노 등 고음질 WebAudioFont 샘플로 바꿀 수 있는 선택칸 추가';
 window.APP_VERSION_DATE = '2026-11-27';
