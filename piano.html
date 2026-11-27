@@ -108,7 +108,7 @@
 
   <p style="font-size:13px;color:#888;margin-top:16px">멜로디는 이 기기의 브라우저에만 저장돼요(GitHub에 올라가지 않아요).</p>
 </div>
-<script src="sound.js?v=49"></script>
+<script src="sound.js?v=50"></script>
 <script src="vendor/webaudiofont/WebAudioFontPlayer.js?v=1"></script>
 <script>
 (function () {
@@ -316,7 +316,7 @@
   // 틀고, 건반 하이라이트는 그와 별도로 setTimeout으로 흉내만 낸다(화면
   // 표시용이라 샘플 단위 정확도까지는 필요 없음). 음이 화면 밖에 있으면
   // 스크롤해서 보여준다.
-  var autoTimers = [], autoBtn = null;
+  var autoTimers = [], autoBtn = null, melodyHandle = null;
   function clearActiveHighlights() {
     var i, active = document.querySelectorAll('#piano .active');
     for (i = 0; i < active.length; i++) active[i].className = active[i].className.replace(/ active\b/, '');
@@ -325,6 +325,10 @@
     for (var i = 0; i < autoTimers.length; i++) clearTimeout(autoTimers[i]);
     autoTimers = [];
     clearActiveHighlights();
+    // SFX.playMelody가 돌려주는 핸들로 실제 소리도 끊는다 — 예전엔 "정지"를
+    // 눌러도 건반 하이라이트만 멈추고 이미 예약된 소리는 끝까지 나갔음(특히
+    // "내 음악"에서 가져온 긴 곡에서 체감됨).
+    if (melodyHandle) { try { melodyHandle.stop(); } catch (e) {} melodyHandle = null; }
     if (autoBtn) { autoBtn.textContent = '재생'; autoBtn = null; }
   }
   function ensureKeyVisible(el) {
@@ -335,7 +339,7 @@
   }
   function autoPlay(obj, btn) {
     stopAutoPlay();
-    try { SFX.playMelody(obj); } catch (e) {}
+    try { melodyHandle = SFX.playMelody(obj); } catch (e) {}
     btn.textContent = '정지'; autoBtn = btn;
     var notes = obj.notes || [], i, note, el, endSec = 0;
     for (i = 0; i < notes.length; i++) {

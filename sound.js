@@ -573,38 +573,75 @@
     for (var i = 0; i < times; i++) playNote(freq, dur, inst, (vol || 0.1) * Math.pow(decay, i), (delay || 0) + i * gap, doubling);
   }
   // 녹음된 멜로디 하나를 길이가 정해진 음표들로 한 번만 재생(미리듣기 / 효과음으로 쓸 때)
-  function playVoices(freq, dur, inst, delay, doubling, echoOn) {
-    if (echoOn) playNoteEcho(freq, dur, inst, 0.13, delay, 3, 0.09, 0.55, doubling);
-    else playNote(freq, dur, inst, 0.13, delay, doubling);
+  function playVoices(freq, dur, inst, delay, doubling, echoOn, volScale) {
+    volScale = volScale == null ? 1 : volScale;
+    if (echoOn) playNoteEcho(freq, dur, inst, 0.13 * volScale, delay, 3, 0.09, 0.55, doubling);
+    else playNote(freq, dur, inst, 0.13 * volScale, delay, doubling);
   }
-  function playMelody(obj) {
-    if (muted || !ctx || !obj || !obj.notes) return;
-    var i, note, wafId = obj.instrument || 'piano';
+  // 동시에 울리는 음이 가장 많이 겹치는 지점의 개수 — buildSong()이 배경음악의
+  // 3성부 재생(mtone/schedule)에 쓰는 것과 같은 방식을 여기도 적용하기 위함.
+  // notes: [{t, dur}, ...](초 단위). 시작(+1)/끝(-1) 이벤트를 시간순으로 쓸어가며
+  // 셈 — 끝 이벤트를 같은 시각의 시작 이벤트보다 먼저 처리해서, 한 음이 막
+  // 끝나는 바로 그 순간 시작하는 다음 음과는 안 겹친 것으로 침.
+  function computeMaxPoly(notes) {
+    var events = [], i, n, max = 1, cur = 0;
+    for (i = 0; i < notes.length; i++) {
+      n = notes[i];
+      events.push([n.t, 1]);
+      events.push([n.t + Math.max(0.001, n.dur), -1]);
+    }
+    events.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    for (i = 0; i < events.length; i++) { cur += events[i][1]; if (cur > max) max = cur; }
+    return max;
+  }
+  // playMelody가 쓰던 "곡 전체를 한 번에 다 예약"하는 방식은, 짧은 녹음(몇 초짜리
+  // 효과음 대체용)에는 문제가 없었지만 "내 음악"에서 가져온 긴 곡(100초 넘게,
+  // 수백 개 음)을 돌리면 — WebAudioFontPlayer의 envelope 재사용 풀은 "실제 시간이
+  // 그 음의 예약 끝(when+duration)을 지나야" 재사용하는데, 한 번에 다 미리 예약해
+  // 버리면 그 시점에 실제 시간은 아직 맨 처음이라 재사용 조건이 영영 안 맞아서 음
+  // 하나하나가 전부 새 노드로 쌓여(최대 수백 개) 곡이 끝날 때까지 안 치워짐 —
+  // 건반을 오래 누를 때 느려지던 것과 같은 종류의 문제가 여기서도 재현됨. "내
+  // 음악" 자체는 괜찮은 이유는 그쪽(mtone/schedule)이 0.4초 앞만 내다보며 그때그때
+  // 예약해서 한 번에 살아있는 노드 수가 항상 적기 때문 — 그 방식을 여기도 적용.
+  function scheduleMelodyNote(obj, note, when, polyScale) {
+    var wafId = obj.instrument || 'piano';
     wafEnsureInstrument(wafId);
     var preset = wafPresetFor(wafId);
-    // WebAudioFont 샘플이 준비돼 있으면 그걸로 재생 — 음표마다 시작 시각/
-    // 길이를 미리 알고 있어서(라이브 연주와 달리 stop()을 따로 받을 필요
-    // 없음) queueWaveTable에 바로 예약해 넣으면 됨.
     if (preset) {
-      var t0 = ctx.currentTime;
-      for (i = 0; i < obj.notes.length; i++) {
-        note = obj.notes[i];
-        wafPlayer.queueWaveTable(ctx, instBus(), preset, t0 + note.t, note.midi, note.dur, 0.5);
-        if (obj.doubling) wafPlayer.queueWaveTable(ctx, instBus(), preset, t0 + note.t, note.midi + 0.12, note.dur, 0.35);
-        if (obj.echo) {
-          var times = 3, gap = 0.09, decay = 0.55;
-          for (var k = 1; k < times; k++) {
-            wafPlayer.queueWaveTable(ctx, instBus(), preset, t0 + note.t + k * gap, note.midi, Math.max(0.05, note.dur - k * gap), 0.22 * Math.pow(decay, k));
-          }
+      wafPlayer.queueWaveTable(ctx, instBus(), preset, when, note.midi, note.dur, 0.5 * polyScale);
+      if (obj.doubling) wafPlayer.queueWaveTable(ctx, instBus(), preset, when, note.midi + 0.12, note.dur, 0.35 * polyScale);
+      if (obj.echo) {
+        var times = 3, gap = 0.09, decay = 0.55;
+        for (var k = 1; k < times; k++) {
+          wafPlayer.queueWaveTable(ctx, instBus(), preset, when + k * gap, note.midi, Math.max(0.05, note.dur - k * gap), 0.22 * Math.pow(decay, k) * polyScale);
         }
       }
       return;
     }
-    var inst = INSTRUMENTS[obj.instrument] || INSTRUMENTS.piano, m, freq;
-    for (i = 0; i < obj.notes.length; i++) {
-      note = obj.notes[i]; m = note.midi + (inst.octave || 0) * 12; freq = midiToFreq(m);
-      playVoices(freq, note.dur, inst, note.t, obj.doubling, obj.echo);
+    var inst = INSTRUMENTS[obj.instrument] || INSTRUMENTS.piano, m = note.midi + (inst.octave || 0) * 12, freq = midiToFreq(m);
+    playVoices(freq, note.dur, inst, when - ctx.currentTime, obj.doubling, obj.echo, polyScale);
+  }
+  // 음표마다 미리 WAF 샘플이 준비됐는지 다시 확인해서(스케줄 당시가 아니라 매번
+  // 그때그때), 긴 곡 재생 중간에 샘플 로딩이 끝나면 그 이후 음부터 바로 고음질로
+  // 바뀌는 것도 덤으로 됨(예전엔 재생 시작 순간 한 번만 확인해서, 그 순간 샘플이
+  // 아직 없으면 곡 끝까지 오실레이터로만 갔음). 반환하는 {stop} 핸들로 재생 중에도
+  // 끊을 수 있음(한 번에 다 예약하던 예전 방식은 중간에 못 끊었음).
+  function playMelody(obj) {
+    if (muted || !ctx || !obj || !obj.notes) return null;
+    var notes = obj.notes, idx = 0, t0 = ctx.currentTime + 0.03, timer;
+    var polyScale = Math.min(1, 2.4 / computeMaxPoly(notes));
+    function step() {
+      var now = ctx.currentTime, when;
+      while (idx < notes.length && t0 + notes[idx].t <= now + 0.4) {
+        when = t0 + notes[idx].t; if (when < now) when = now + 0.005;
+        try { scheduleMelodyNote(obj, notes[idx], when, polyScale); } catch (e) {}
+        idx++;
+      }
+      if (idx >= notes.length && timer) { clearInterval(timer); timer = null; }
     }
+    timer = setInterval(step, 120);
+    step();
+    return { stop: function () { if (timer) { clearInterval(timer); timer = null; } idx = notes.length; } };
   }
   // 저장된 멜로디(piano.html이 localStorage 'piano-list-v1'에 적어 둠)를 id로 찾는다
   function findMelody(id) {
@@ -856,7 +893,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 49,
+    version: 50,
     // ---- 리듬 게임 / MIDI 미리 듣기용 곡 시계 ----
     now: function () { return ctx ? ctx.currentTime : -1; },
     ready: function () { return !!ctx && (!ctx.state || ctx.state === 'running'); },
@@ -903,7 +940,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 49, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 50, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
