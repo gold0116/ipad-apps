@@ -467,6 +467,24 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     var bb = st.upTo(dctx, curOp.q.length / 2, fin);
     if (bb) markDoc(bb);
   }
+  // 손을 떼지 않고 한 획을 계속 길게 이어 그리면(실기에서 느려지다
+  // 리프레시됨을 확인) curOp.q가 끝없이 커짐 — touchmove 1번당 계산량은
+  // 이미 O(1)이라 정확한 원인(누적 메모리? 캔버스 GPU 쪽?)은 실기 밖에서
+  // 확실히 알기 어려움. 원인과 무관하게 안전하게, 일정 길이가 되면 화면엔
+  // 안 보이게 이어서 지금까지 그린 부분만 먼저 하나의 op로 확정하고 같은
+  // 자리에서 새 op를 시작해 계속 그어나간다(끝맺지 않은 채로) — 한 op의
+  // 크기를 상한선 아래로 묶어두는 안전장치.
+  var MAX_STROKE_PTS = 400;
+  function splitStrokeIfLong(p) {
+    if (curOp.q.length < MAX_STROKE_PTS * 2) return;
+    drawStroke(true);
+    curOp.d = Math.max(0, ts() - curOp.t);
+    var finished = curOp;
+    var dp = toDoc(p.x, p.y);
+    curOp = { k: 's', p: finished.p, c: finished.c, w: finished.w, a: finished.a, t: ts(), d: 0, s: Math.floor(Math.random() * 1000000), q: [r1(dp.x), r1(dp.y)] };
+    st = new Stroker(curOp, doc.paper);
+    commitOp(finished);
+  }
   function strokeMove(p) {
     var d = dist(p, lastS);
     if (d < 1.6) return;
@@ -474,7 +492,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     var q = mode === 'pending' ? pend.q : curOp.q, dp = toDoc(p.x, p.y);
     q.push(r1(dp.x), r1(dp.y));
     if (mode === 'pending') { pend.moved += d; if (+new Date() - pend.t >= 70 || pend.moved > 10) activate(); }
-    else drawStroke(false);
+    else { drawStroke(false); splitStrokeIfLong(p); }
   }
   function endStroke() {
     drawStroke(true);
