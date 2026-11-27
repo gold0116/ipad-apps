@@ -626,7 +626,11 @@
     { id: 'bs_sweep_out', name: '쓸려 나감', src: 'sfx/sweep_out.mp3' },
     { id: 'bs_button_click', name: '버튼 클릭', src: 'sfx/button_click.mp3' },
     { id: 'bs_start_game', name: '게임 시작', src: 'sfx/start_game.mp3' },
-    { id: 'bs_game_complete', name: '게임 클리어', src: 'sfx/game_complete.mp3' },
+    // 원본 파일 자체가 다른 효과음보다 훨씬 크게(평균 -8dB대, 나머지는 대부분
+    // -15~-23dB대 — ffmpeg volumedetect로 직접 측정) 녹음돼 있어서 버블 슈터에서
+    // 레벨을 깰 때마다 유독 소리가 큰 문제가 있었음 — vol로 재생 시에만 줄임
+    // (파일 자체는 안 건드려서 "효과음 모음"에서 원본 그대로 들어볼 수 있음).
+    { id: 'bs_game_complete', name: '게임 클리어', src: 'sfx/game_complete.mp3', vol: 0.3 },
     { id: 'bs_player_win', name: '승리', src: 'sfx/player_win.mp3' },
     { id: 'bs_player_loss', name: '패배', src: 'sfx/player_loss.mp3' }
   ];
@@ -663,16 +667,26 @@
   function playClip(clip) {
     if (muted) return;
     var buf = clipBuffers[clip.id];
+    // clip.vol이 있으면(원본 파일 자체가 다른 효과음보다 훨씬 크게 녹음된
+    // 경우, 예: bs_game_complete) 게인 노드를 하나 끼워 그만큼만 줄인다 —
+    // 없으면(대부분의 클립) 예전처럼 destination에 바로 연결.
     if (buf && ctx) {
       try {
         var src = ctx.createBufferSource();
-        src.buffer = buf; src.connect(ctx.destination);
+        src.buffer = buf;
+        if (clip.vol != null) {
+          var g = ctx.createGain ? ctx.createGain() : ctx.createGainNode();
+          g.gain.value = clip.vol;
+          src.connect(g); g.connect(ctx.destination);
+        } else {
+          src.connect(ctx.destination);
+        }
         if (src.start) src.start(0); else src.noteOn(0);
         return;
       } catch (e) {}
     }
     // 아직 디코드가 안 끝났으면(맨 처음 터치 직후 등 드문 경우) 예전 방식으로라도 재생
-    try { var a = new Audio(clip.src); a.play(); } catch (e) {}
+    try { var a = new Audio(clip.src); if (clip.vol != null) a.volume = clip.vol; a.play(); } catch (e) {}
   }
 
   var FX = {
@@ -798,7 +812,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 46,
+    version: 47,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -831,7 +845,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 46, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 47, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
