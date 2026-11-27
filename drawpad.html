@@ -356,7 +356,14 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     view.z = z; placeAt(view, p.x, p.y, ax, ay); clampView(view);
   }
   function snapA(a) { var q = Math.PI / 2, n = Math.round(a / q); return Math.abs(a - n * q) < 0.07 ? n * q : a; }
-  var dirty = null, fullFlag = false, rafId = 0;
+  var dirty = null, fullFlag = false, rafId = 0, lastPaintAt = 0;
+  // 한계 테스트 실기 결과: 저장을 꺼서 매 획이 더 빨리(더 쉴 틈 없이)
+  // 반복되게 했더니 오히려 더 빨리(1획만에) 죽었음 — 저장이 끼어들던
+  // 블로킹 멈춤이 뜻밖에 캔버스 쪽을 쉬게 해주고 있었을 가능성. 즉
+  // 누적 총량보다 "초당 화면을 다시 그리는(캔버스→캔버스 복사) 빈도"가
+  // 더 중요한 변수일 수 있다는 가설 — 그 빈도에 명시적인 상한을 둔다
+  // (화면 내용은 그대로 보존되고, 다음 기회에 합쳐서 그려짐).
+  var MIN_PAINT_GAP = 32;
   function sched() { if (!rafId) rafId = RAF(frame); }
   function markFull() { fullFlag = true; sched(); }
   function markRect(x0, y0, x1, y1) { if (!dirty) dirty = [x0, y0, x1, y1]; else { if (x0 < dirty[0]) dirty[0] = x0; if (y0 < dirty[1]) dirty[1] = y0; if (x1 > dirty[2]) dirty[2] = x1; if (y1 > dirty[3]) dirty[3] = y1; } sched(); }
@@ -383,6 +390,11 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   function frame() {
     rafId = 0;
     if (!doc) return;
+    if (!inReplay && (dirty || fullFlag)) {
+      var now = +new Date();
+      if (now - lastPaintAt < MIN_PAINT_GAP) { sched(); return; }
+      lastPaintAt = now;
+    }
     var src = inReplay ? R.cv : docCv, V = inReplay ? R.view : view;
     if (fullFlag) { paintView(src, V, 0, 0, vw, vh); }
     else if (dirty) { paintView(src, V, dirty[0], dirty[1], dirty[2], dirty[3]); }
