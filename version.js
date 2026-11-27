@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.25';
-window.APP_VERSION_NOTE = '버블 슈터: 레벨 클리어 효과음(game_complete.mp3)이 다른 효과음보다 훨씬 크게 녹음돼 있던 것을 재생 시 볼륨만 줄임(원본 파일은 안 건드림)';
+window.APP_VERSION = '0.4.26';
+window.APP_VERSION_NOTE = '백업/복원: Firebase Realtime Database를 원격 백업 대상으로 추가(주소/비밀 입력 후 올리기·불러오기) — 노트북 없이도 기기 간 백업 가능';
 window.APP_VERSION_DATE = '2026-11-27';

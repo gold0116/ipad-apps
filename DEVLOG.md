@@ -3,6 +3,41 @@
 > 다음 세션 시작할 때 이 문서부터 읽으면 맥락 복구에 도움 됩니다.
 > 지켜야 할 "규칙"은 여기가 아니라 `CLAUDE.md`에 있습니다.
 
+## 2026-11-27 세션 요약 (백업/복원: Firebase Realtime Database 원격 백업 추가)
+
+사용자: "앱의 메모장과 백업 기능을 위해 Firebase realtime db를 개설했어.
+접속 주소와 보안 비밀은 따로 메모해뒀어. 이제 네가 연동하도록 구현해 주면
+주소와 비번을 입력해서 연동해볼게." — 범위는 질문으로 확인: (1) 메모장
+실시간 동기화까지는 가지 않고 **백업/복원의 원격 대상으로만** 씀(기존
+"노트북 서버" 섹션과 같은 역할), (2) 입력칸은 `backup.html`에 둠.
+
+- `backup.html`에 "5. Firebase로 백업/복원" 섹션을 새로 추가: Realtime
+  Database 주소 + 보안 비밀(Secret) 입력칸, "Firebase로 백업 올리기"/
+  "Firebase에서 불러오기" 버튼. Firebase JS SDK는 안 쓰고, 이 저장소
+  전체가 쓰는 평범한 `XMLHttpRequest`로 Realtime Database의 REST API
+  (`<주소>/ipadAppsBackup.json?auth=<비밀>`)를 직접 호출 — SDK는 최신
+  문법 기반이라 iPad 2 구형 WebKit 호환이 불확실하고, 이 REST 경로는
+  CORS가 기본 허용돼 있어서(실측: 프리플라이트에 `Access-Control-Allow-
+  Methods` 포함하면 통과) "노트북 서버" 섹션처럼 페이지를 오가는 다리
+  (`backup-bridge.html`)도 필요 없음. 저장 형식은 기존 `makeBackup()`/
+  `parseBackup()`을 그대로 재사용(올릴 때 PUT으로 그 JSON 그대로 보내고,
+  받아올 때는 "노트북에서 가져오기"와 똑같이 3번 복원칸에 채워서 사용자가
+  복원 방식을 고르고 눌러야 실제 반영됨 — 무조건 덮어쓰지 않음).
+- 주소/비밀은 `localStorage`(`fbUrl`/`fbSecret`)에만 저장하고, 기존
+  `backupServer`/`appBaseUrl`과 같은 방식으로 백업 텍스트(`readAll()`)
+  에서 제외 — 특히 비밀은 백업 텍스트에 실려서 다른 Firebase로 또
+  올라가거나 깃허브에 커밋될 일이 없어야 해서 꼭 필요한 처리.
+- 검증: Playwright + 자체 띄운 가짜 HTTPS 서버(Realtime Database REST
+  API를 흉내 — PUT 받으면 저장, GET 하면 그대로 반환, 올바른 CORS 헤더)로
+  전체 왕복 확인 — 올리기 성공, `fbUrl`/`fbSecret`은 localStorage에만
+  저장되고 백업 본문에는 안 섞여 들어가는 것, 불러오기 후 3번 칸에 올바른
+  내용이 채워지는 것, 실제로 "복원하기"를 눌러서 지워뒀던 메모가 다시
+  localStorage에 복원되는 것까지 끝까지 확인. 콘솔 에러 없음.
+- app.appcache v102→v103, version.js 0.4.25→0.4.26. (공용 모듈이 아니라
+  sound.js 같은 버전 쿼리 일괄 교체는 필요 없음.) **iPad 2 실기 미확인**
+  — 사용자가 실제 주소/비밀을 입력해서 올리기/불러오기가 되는지 다음에
+  직접 확인 필요.
+
 ## 2026-11-27 세션 요약 (버블 슈터: 레벨 클리어 효과음만 유독 큰 문제)
 
 사용자: "버블 슈터 게임 레벨 넘길때 나오는 소리가 다른 소리보다 훨씬 더

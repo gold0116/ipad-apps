@@ -60,6 +60,20 @@
     </div>
     <div id="msg3" style="margin-top:6px"></div>
   </div>
+
+  <h2>5. Firebase로 백업/복원 <span class="small">(선택 기능)</span></h2>
+  <div class="box">
+    <p class="small" style="margin-top:0">Firebase Realtime Database에 백업을 올려두면 와이파이 없이도(모바일 데이터로도), 노트북 없이도 다른 기기에서 불러올 수 있어요. 주소와 비밀은 이 기기에만 저장되고, 위 백업 텍스트/깃허브에는 절대 포함되지 않아요.</p>
+    <div class="small">Realtime Database 주소</div>
+    <input type="text" id="fbUrl" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="https://내프로젝트-default-rtdb.firebaseio.com">
+    <div class="small" style="margin-top:6px">보안 비밀(Secret)</div>
+    <input type="password" id="fbSecret" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="데이터베이스 비밀">
+    <div style="margin-top:8px">
+      <button class="btn" id="toFb">Firebase로 백업 올리기</button>
+      <button class="btn gray" id="fromFb">Firebase에서 불러오기</button>
+    </div>
+    <div id="msg4" style="margin-top:6px"></div>
+  </div>
 </div>
 <script>
 (function () {
@@ -70,8 +84,9 @@
 
   function readAll() {
     var o = {};
-    // 노트북 주소 같은 이 기기 전용 설정은 백업에 넣지 않는다
-    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k.charAt(0) !== '_' && k !== 'backupServer' && k !== 'appBaseUrl') o[k] = localStorage.getItem(k); } } catch (e) {}
+    // 노트북 주소/Firebase 주소·비밀 같은 이 기기 전용 설정은 백업에 넣지 않는다
+    // (특히 fbSecret은 비밀이라 백업 텍스트나 다른 Firebase로 절대 실려 가면 안 됨)
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k.charAt(0) !== '_' && k !== 'backupServer' && k !== 'appBaseUrl' && k !== 'fbUrl' && k !== 'fbSecret') o[k] = localStorage.getItem(k); } } catch (e) {}
     return o;
   }
   function count(v) { try { var a = JSON.parse(v); return a instanceof Array ? a.length + '개' : null; } catch (e) { return null; } }
@@ -178,6 +193,58 @@
     var s = server(); if (!s) return;
     window.name = '';
     location.href = s + '/backup-bridge.html#restore?back=' + encodeURIComponent(back);
+  };
+
+  // ---- Firebase Realtime Database 연동 ----
+  // SDK를 안 쓰고 Realtime Database의 REST API(<주소>/경로.json?auth=비밀)를
+  // 이 저장소 전체가 쓰는 것과 같은 평범한 XMLHttpRequest로 직접 호출한다
+  // (Firebase JS SDK는 최신 문법 기반이라 iPad 2의 구형 WebKit에서 돌아간다는
+  // 보장이 없고, 이 REST 경로는 CORS가 기본 허용돼 있어서 노트북 서버 섹션처럼
+  // 페이지를 오가는 다리(backup-bridge.html)도 필요 없음). 백업 하나를 통째로
+  // 올리고 받아오는 거라, 저장 형식은 makeBackup()/parseBackup()을 그대로 재사용.
+  var FB_PATH = 'ipadAppsBackup';
+  try { $('fbUrl').value = localStorage.getItem('fbUrl') || ''; } catch (e) {}
+  try { $('fbSecret').value = localStorage.getItem('fbSecret') || ''; } catch (e) {}
+  function fbTarget() {
+    var u = $('fbUrl').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+    var secret = $('fbSecret').value.replace(/^\s+|\s+$/g, '');
+    if (!/^https:\/\//i.test(u)) { say('msg4', 'Firebase 주소를 https://로 시작하게 넣으세요 (Firebase 콘솔의 Realtime Database 주소 그대로)', 'warn'); return null; }
+    if (!secret) { say('msg4', '보안 비밀(Secret)을 입력하세요', 'warn'); return null; }
+    try { localStorage.setItem('fbUrl', u); localStorage.setItem('fbSecret', secret); } catch (e) {}
+    return { url: u + '/' + FB_PATH + '.json?auth=' + encodeURIComponent(secret) };
+  }
+  $('toFb').onclick = function () {
+    var t = fbTarget(); if (!t) return;
+    say('msg4', '올리는 중…', '');
+    var x = new XMLHttpRequest();
+    x.open('PUT', t.url, true);
+    x.setRequestHeader('Content-Type', 'application/json');
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      if (x.status >= 200 && x.status < 300) say('msg4', 'Firebase로 백업을 올렸어요', 'ok');
+      else say('msg4', '업로드 실패 (상태 ' + x.status + ') — 주소/비밀을 확인하세요', 'warn');
+    };
+    x.onerror = function () { say('msg4', '업로드 실패 — 인터넷 연결이나 주소를 확인하세요', 'warn'); };
+    try { x.send(makeBackup()); } catch (e) { say('msg4', '업로드 실패: ' + String(e.message || e), 'warn'); }
+  };
+  $('fromFb').onclick = function () {
+    var t = fbTarget(); if (!t) return;
+    say('msg4', '불러오는 중…', '');
+    var x = new XMLHttpRequest();
+    x.open('GET', t.url, true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      if (x.status < 200 || x.status >= 300) { say('msg4', '다운로드 실패 (상태 ' + x.status + ') — 주소/비밀을 확인하세요', 'warn'); return; }
+      if (!x.responseText || x.responseText === 'null') { say('msg4', 'Firebase에 올려둔 백업이 아직 없어요', 'warn'); return; }
+      var o = parseBackup(x.responseText);
+      if (!o) { say('msg4', 'Firebase에서 가져온 데이터가 올바르지 않아요', 'warn'); return; }
+      setPending(x.responseText);
+      var keys = 0; for (var kk in o.data) keys++;
+      say('msg4', 'Firebase에서 불러왔어요 (' + String(o.date || '').substr(0, 24) + ', 항목 ' + keys + '개). 아래 3번에서 복원 방식을 고르고 복원하기를 누르세요.', 'ok');
+      window.scrollTo(0, $('inp').offsetTop - 80);
+    };
+    x.onerror = function () { say('msg4', '다운로드 실패 — 인터넷 연결이나 주소를 확인하세요', 'warn'); };
+    x.send();
   };
 
   // 노트북에서 돌아왔을 때
