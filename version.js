@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.28';
-window.APP_VERSION_NOTE = 'Firebase 백업: bgm:snake.html처럼 .이 든 localStorage 키가 있으면 통째로 거부되던 400 에러 고침(보낼 때만 안전하게 바꿔서 전송)';
+window.APP_VERSION = '0.4.29';
+window.APP_VERSION_NOTE = '디버그: 전체화면(풀스크린) 가능성 시험 섹션 추가 — Fullscreen API 지원 여부, 홈 화면 앱 모드 여부 등을 확인';
 window.APP_VERSION_DATE = '2026-11-27';

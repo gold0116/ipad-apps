@@ -31,6 +31,57 @@
     <button class="btn gray" id="m1">배경음 시작</button><button class="btn gray" id="m2">배경음 정지</button>
   </div>
 
+  <h2>전체화면 가능성 시험</h2>
+  <p style="font-size:14px;color:#666">게임을 주소창/도구줄 없이 화면 전체로 쓸 수 있는지 확인해요. 아래 표를 보고, 버튼도 눌러본 뒤 결과를 알려 주세요.</p>
+  <table id="fsinfo"></table>
+  <div style="margin-top:8px">
+    <button class="btn" id="fsBtn">전체화면 시도해보기</button>
+    <button class="btn gray" id="fsExitBtn">전체화면 끝내기</button>
+  </div>
+  <div id="fsStat" style="font-size:14px;margin-top:6px;color:#444"></div>
+  <div id="fsBox" style="margin-top:8px;background:#2f6fed;color:#fff;text-align:center;font-size:18px;line-height:1.5;padding:40px 10px;border-radius:10px;display:none">여기가 전체화면 테스트 박스예요<br>이 파란 박스가 화면 전체를 덮으면 전체화면 성공!</div>
+  <p style="font-size:13px;color:#888;margin-top:8px">참고: iOS Safari는 일반 페이지에 "버튼으로 전체화면"(Fullscreen API) 자체를 지원하지 않아요(동영상 재생에만 따로 전체화면이 있었음) — 위에서 "미지원"이 나오면 정상이고, 버그가 아니에요. 아이폰/아이패드에서 주소창 없이 화면을 꽉 채우는 실질적인 방법은 Safari 공유 버튼 → "홈 화면에 추가"로 아이콘을 만들고 <b>그 아이콘으로 실행하는 것</b>뿐이에요(이미 모든 페이지에 그 설정이 돼 있어요). 아래 표의 "홈 화면 앱 모드" 줄로 지금 그렇게 열려 있는지 확인하세요.</p>
+  <script>
+  (function () {
+    function $(i) { return document.getElementById(i); }
+    var de = document.documentElement;
+    var reqFn = de.requestFullscreen || de.webkitRequestFullscreen || de.webkitRequestFullScreen || de.mozRequestFullScreen || de.msRequestFullscreen;
+    var exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    function isStandaloneDisplay() { try { return window.matchMedia && window.matchMedia('(display-mode: standalone)').matches; } catch (e) { return false; } }
+    function isFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement || document.webkitCurrentFullScreenElement || document.mozFullScreenElement || document.msFullscreenElement); }
+    function renderFsInfo() {
+      var rows = [
+        ['화면 전체 크기(screen)', screen.width + ' x ' + screen.height],
+        ['지금 보이는 영역(viewport)', window.innerWidth + ' x ' + window.innerHeight],
+        ['주소창/도구줄에 가려진 높이(세로모드 기준)', Math.max(0, screen.height - window.innerHeight) + 'px'],
+        ['홈 화면 앱 모드(standalone)', window.navigator.standalone ? '예' : '아니오 (Safari 탭/즐겨찾기로 열림)'],
+        ['display-mode: standalone', isStandaloneDisplay() ? '예' : '아니오'],
+        ['전체화면 API(Fullscreen) 지원', reqFn ? '지원' : '미지원'],
+        ['지금 전체화면 상태', isFs() ? '전체화면 중' : '아니오']
+      ];
+      var h = ''; for (var i = 0; i < rows.length; i++) h += '<tr><td>' + rows[i][0] + '</td><td>' + rows[i][1] + '</td></tr>';
+      $('fsinfo').innerHTML = h;
+    }
+    $('fsBtn').onclick = function () {
+      $('fsBox').style.display = 'block';
+      if (!reqFn) { $('fsStat').textContent = '이 브라우저는 전체화면 API가 없어요. 홈 화면에 추가한 아이콘으로 열면 주소창 없이 꽉 차게 나오는지 그쪽으로 확인해 보세요.'; return; }
+      try {
+        var p = reqFn.call(de);
+        if (p && p.catch) p.catch(function (e) { $('fsStat').textContent = '전체화면 전환 실패: ' + String(e.message || e); });
+      } catch (e) { $('fsStat').textContent = '전체화면 전환 실패: ' + String(e.message || e); }
+      setTimeout(function () { $('fsStat').textContent = isFs() ? '전체화면으로 바뀌었어요!' : '버튼을 눌렀지만 전체화면으로 안 바뀌었어요.'; renderFsInfo(); }, 300);
+    };
+    $('fsExitBtn').onclick = function () {
+      if (exitFn) { try { exitFn.call(document); } catch (e) {} }
+      $('fsBox').style.display = 'none';
+      setTimeout(renderFsInfo, 300);
+    };
+    document.addEventListener('fullscreenchange', renderFsInfo, false);
+    document.addEventListener('webkitfullscreenchange', renderFsInfo, false);
+    renderFsInfo();
+  })();
+  </script>
+
   <h2>유튜브 재생 시험</h2>
   <p style="font-size:14px;color:#666">이 기기에서 유튜브 공식 플레이어가 열리고 재생되는지 확인해요. 아래 버튼을 하나씩 눌러 보고 결과를 알려 주세요.</p>
   <table id="vinfo"></table>
