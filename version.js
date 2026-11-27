@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.4.23';
-window.APP_VERSION_NOTE = '피아노: WebAudioFont 고음질 샘플을 9개 악기(피아노·일렉피아노·기타·일렉기타·현악·금관·플루트·뮤직박스·실로폰)로 확대, 악기 목록에 "(고음질)" 표시 추가';
-window.APP_VERSION_DATE = '2026-11-26';
+window.APP_VERSION = '0.4.24';
+window.APP_VERSION_NOTE = '피아노: 연주할수록 소리가 끊기고 깨지는 버그 — 오실레이터 음(피아노 외 대부분 악기)이 음이 끝나도 오디오 그래프에서 안 끊겨 쌓이던 것을 끝나는 즉시 disconnect하도록 고침(iPad 2 실기 확인 대기)';
+window.APP_VERSION_DATE = '2026-11-27';

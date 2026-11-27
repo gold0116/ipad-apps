@@ -300,12 +300,28 @@
       group.gain.setValueAtTime(0.0001, t0);
       group.gain.linearRampToValueAtTime(peak, t0 + a);
       group.gain.setTargetAtTime(sustainLevel, t0 + a, decayTau);
-      var oscs = [], i, h, o, g;
+      var oscs = [], i, h, o, g, pending = 0;
+      // 오실레이터가 stop() 시각을 지나 다 울린 뒤에도 group/instBus에 그대로
+      // 연결된 채 JS 참조만 없이 남으면, 최신 브라우저는 알아서 회수하지만
+      // iPad 2(iOS 9 Safari)는 그 회수가 느리거나 안 돼서 건반을 칠수록
+      // 오디오 그래프에 끝난 음의 노드가 계속 쌓여 점점 끊기는 원인이 됨 —
+      // 끝나는 즉시(onended) 직접 disconnect해서 안 쌓이게 한다.
+      function onEnded(osc, gn) {
+        try { osc.disconnect(); } catch (e) {}
+        try { gn.disconnect(); } catch (e) {}
+        pending--;
+        if (pending <= 0) { try { group.disconnect(); } catch (e) {} }
+      }
+      function trackOsc(osc, gn) {
+        pending++;
+        try { osc.onended = function () { onEnded(osc, gn); }; } catch (e) {}
+      }
       for (i = 0; i < inst.harmonics.length; i++) {
         h = inst.harmonics[i];
         o = ctx.createOscillator(); o.type = wave; o.frequency.value = freq * h[0];
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
         o.connect(g); g.connect(group);
+        trackOsc(o, g);
         if (o.start) o.start(); else o.noteOn(0);
         oscs.push(o);
       }
@@ -314,6 +330,7 @@
         o = ctx.createOscillator(); o.type = wave; o.frequency.value = freq * 1.012 * h[0];
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1] * 0.75;
         o.connect(g); g.connect(group);
+        trackOsc(o, g);
         if (o.start) o.start(); else o.noteOn(0);
         oscs.push(o);
       }
@@ -478,12 +495,25 @@
       group.gain.linearRampToValueAtTime(vol, t + a);
       group.gain.setTargetAtTime(sustainLevel, t + a, Math.max(0.015, adsr.d / 3));
       group.gain.setTargetAtTime(0.0001, relStart, r / 3);
-      var h, o, g, i, stopAt = t + dur + r + 0.05;
+      var h, o, g, i, stopAt = t + dur + r + 0.05, pending = 0;
+      // harmonicChord와 같은 이유(iPad 2에서 끝난 오실레이터/group이 안 치워져
+      // 쌓이는 문제)로, 멜로디 재생 쪽(playNote)도 끝나는 즉시 명시적으로 끊는다.
+      function onEnded(osc, gn) {
+        try { osc.disconnect(); } catch (e) {}
+        try { gn.disconnect(); } catch (e) {}
+        pending--;
+        if (pending <= 0) { try { group.disconnect(); } catch (e) {} }
+      }
+      function trackOsc(osc, gn) {
+        pending++;
+        try { osc.onended = function () { onEnded(osc, gn); }; } catch (e) {}
+      }
       for (i = 0; i < inst.harmonics.length; i++) {
         h = inst.harmonics[i];
         o = ctx.createOscillator(); o.type = wave; o.frequency.setValueAtTime(freq * h[0], t);
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1];
         o.connect(g); g.connect(group);
+        trackOsc(o, g);
         if (o.start) { o.start(t); o.stop(stopAt); } else { o.noteOn(t); o.noteOff(stopAt); }
       }
       if (doubling) {
@@ -491,6 +521,7 @@
         o = ctx.createOscillator(); o.type = wave; o.frequency.setValueAtTime(freq * 1.012 * h[0], t);
         g = ctx.createGain ? ctx.createGain() : ctx.createGainNode(); g.gain.value = h[1] * 0.75;
         o.connect(g); g.connect(group);
+        trackOsc(o, g);
         if (o.start) { o.start(t); o.stop(stopAt); } else { o.noteOn(t); o.noteOff(stopAt); }
       }
     } catch (e) {}
@@ -767,7 +798,7 @@
       }
       if (FX[name]) FX[name]();
     },
-    version: 45,
+    version: 46,
     liveNoteOn: liveNoteOn,
     playMelody: playMelody,
     instruments: function () {
@@ -800,7 +831,7 @@
     setLoop: function (v) { loopOn = !!v; if (loopOn) ended = false; },
     onMusicEnd: function (cb) { endCb = cb; },
     isPlaying: function () { return playing; },
-    info: function () { return { version: 45, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
+    info: function () { return { version: 46, supported: !!AC, started: !!ctx, state: ctx ? (ctx.state || '(없음)') : '(아직 없음)', muted: muted, music: playing, wanted: wanted, musicMuted: musicMuted }; },
     isMuted: function () { return muted; },
     setMuted: function (v) {
       muted = !!v; try { localStorage.setItem('sfxMuted', muted ? '1' : '0'); } catch (e) {}
