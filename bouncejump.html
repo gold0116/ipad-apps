@@ -11,19 +11,15 @@
   canvas { display: block; margin: 0 auto; background: #bfe6ff; border-radius: 8px; }
   #msg { text-align: center; font-size: 16px; font-weight: bold; color: #e5484d; min-height: 44px; margin-top: 6px; padding: 0 8px; }
   .pad { text-align: center; margin-top: 4px; }
-  .dpad { text-align: center; margin-top: 10px; }
-  .dbtn { display: inline-block; width: 44%; max-width: 160px; padding: 16px 0; margin: 0 6px; font-size: 24px; font-weight: bold; color: #fff; background: #2f6fed; border: none; border-radius: 12px; -webkit-user-select: none; user-select: none; }
-  .dbtn:active { background: #1d4fb8; }
 </style>
 </head>
 <body>
 <div class="top"><a href="index.html">‹ 홈</a> 통통점프</div>
 <div class="wrap">
   <canvas id="cv" width="300" height="480"></canvas>
-  <div id="msg">기기를 기울여서 좌우로 움직여요<br>발판을 밟으면 자동으로 튀어 올라요</div>
+  <div id="msg">화면을 터치하면 시작해요<br>기울여서 좌우로 움직이고, 발판을 밟으면 자동으로 튀어 올라요</div>
   <div class="pad"><button class="btn" id="go">시작하기</button></div>
-  <div class="dpad"><button class="dbtn" id="btnL">◀</button><button class="dbtn" id="btnR">▶</button></div>
-  <p style="text-align:center;color:#888;font-size:13px;margin-top:8px">기울기가 잘 안 되면 위 버튼을 누르고 있어도 움직여요</p>
+  <p style="text-align:center;color:#888;font-size:13px;margin-top:8px">기울기가 잘 안 되면 화면의 왼쪽/오른쪽을 누르고 있어도 움직여요</p>
 </div>
 <script src="sound.js?v=50"></script>
 <script src="touchfx.js?v=3"></script>
@@ -38,7 +34,7 @@
   var W = 300, H = 480;
 
   function layout() {
-    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 210) * (W / H), 420);
+    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 170) * (W / H), 420);
     if (w < 220) w = 220;
     cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
   }
@@ -94,18 +90,23 @@
     }
   }, false);
 
-  // ---- 버튼(보조 조작) ----
+  // ---- 보조 조작: 화면(캔버스) 왼쪽/오른쪽 절반을 누르고 있으면 그 방향으로 이동.
+  // 캔버스 밖에 따로 버튼을 두면 화면 아래로 밀려 안 보이거나 스크롤이 막힐 수
+  // 있어서(실기 피드백으로 확인), 캔버스 자체를 조작 영역으로 씀.
   var leftHeld = false, rightHeld = false;
-  function bindHold(el, onDown, onUp) {
-    el.addEventListener('touchstart', function (e) { e.preventDefault(); onDown(); }, false);
-    el.addEventListener('touchend', function (e) { e.preventDefault(); onUp(); }, false);
-    el.addEventListener('touchcancel', function (e) { e.preventDefault(); onUp(); }, false);
-    el.addEventListener('mousedown', function () { onDown(); }, false);
-    el.addEventListener('mouseup', function () { onUp(); }, false);
-    el.addEventListener('mouseleave', function () { onUp(); }, false);
-  }
-  bindHold($('btnL'), function () { leftHeld = true; }, function () { leftHeld = false; });
-  bindHold($('btnR'), function () { rightHeld = true; }, function () { rightHeld = false; });
+  function canvasX(clientX) { var r = cv.getBoundingClientRect(); return (clientX - r.left) / r.width * W; }
+  cv.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    if (state !== 'run') return;
+    if (canvasX(e.touches[0].clientX) < W / 2) leftHeld = true; else rightHeld = true;
+  }, false);
+  cv.addEventListener('touchmove', function (e) { e.preventDefault(); }, false);
+  cv.addEventListener('touchcancel', function () { leftHeld = false; rightHeld = false; }, false);
+  cv.addEventListener('mousedown', function (e) {
+    if (state !== 'run') return;
+    if (canvasX(e.clientX) < W / 2) leftHeld = true; else rightHeld = true;
+  }, false);
+  cv.addEventListener('mouseleave', function () { leftHeld = false; rightHeld = false; }, false);
   document.addEventListener('keydown', function (e) {
     if (e.keyCode === 37) leftHeld = true; else if (e.keyCode === 39) rightHeld = true; else return;
     e.preventDefault();
@@ -113,7 +114,6 @@
   document.addEventListener('keyup', function (e) {
     if (e.keyCode === 37) leftHeld = false; else if (e.keyCode === 39) rightHeld = false;
   }, false);
-  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
 
   // ---- 물리값 ----
   var GRAVITY = 0.0011, JUMP_VY = -0.62, SPRING_MULT = 1.55, MAX_VX = 0.3;
@@ -172,8 +172,15 @@
     SFX.play('start'); SFX.musicStartIfNotOff(true);
   }
   $('go').onclick = startGame;
-  cv.addEventListener('touchend', function (e) { if (state !== 'run') { e.preventDefault(); startGame(); } }, false);
-  cv.addEventListener('click', function () { if (state !== 'run') startGame(); }, false);
+  cv.addEventListener('touchend', function (e) {
+    e.preventDefault();
+    if (state !== 'run') { startGame(); return; }
+    leftHeld = false; rightHeld = false;
+  }, false);
+  cv.addEventListener('mouseup', function () {
+    if (state !== 'run') { startGame(); return; }
+    leftHeld = false; rightHeld = false;
+  }, false);
 
   function step(dt) {
     if (state !== 'run') return;
@@ -317,5 +324,6 @@
   resetWorld(); last = now(); frame();
 })();
 </script>
+<script>SFX.attachBgm('a');</script>
 </body>
 </html>
