@@ -14,6 +14,7 @@
   .row label { margin-right: 10px; }
   select { font-size: 15px; padding: 5px; }
   input[type=text] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 10px; -webkit-box-sizing: border-box; box-sizing: border-box; }
+  .pianoWrap { padding: 0 16px; }
   #kbdBar { display: -webkit-flex; display: flex; align-items: center; justify-content: center; }
   #kbdBar button { font-size: 16px; padding: 6px 14px; border: 0; border-radius: 8px; background: #8a8f98; color: #fff; margin: 0 3px; }
   #pianoScroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; border-radius: 8px; }
@@ -55,6 +56,8 @@
     </div>
   </div>
 
+</div>
+<div class="pianoWrap">
   <div id="kbdBar">
     <button id="scrollLeftBtn">◀</button>
     <button id="zoomOut">－</button>
@@ -67,6 +70,8 @@
       <div class="bkeys" id="bkeys"></div>
     </div>
   </div>
+</div>
+<div class="wrap">
 
   <div class="card">
     <button id="recBtn">● 녹음 시작</button>
