@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.18';
-window.APP_VERSION_NOTE = '테트리스: 사이드 패널의 중복 배경음 버튼(켜짐/꺼짐·음악 A/B) 제거 — 상단 공통 "배경음" 드롭다운 하나로 통일';
+window.APP_VERSION = '0.5.19';
+window.APP_VERSION_NOTE = '디버그 페이지에 기울기(deviceorientation/devicemotion) 센서 시험 섹션 추가 — 틸트 게임(BounceScape류) 만들기 전 iPad2 실기 확인용';
 window.APP_VERSION_DATE = '2026-11-28';

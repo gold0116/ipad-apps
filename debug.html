@@ -310,6 +310,64 @@
       for (i = 0; i < t.length; i++) { x.fillStyle = i % 2 ? '#c0262d' : '#1d7a3a'; x.fillText(t.charAt(i), 20 + i * 35, 36); }
     })();
   </script>
+
+  <h2>기울기 센서 시험 (틸트 게임용)</h2>
+  <p style="font-size:14px;color:#666">기기를 좌우로 기울여 보세요. 아래 공이 그 방향으로 움직이면 이 기기·이 모드에서 기울기 조작이 된다는 뜻이에요.
+  <b>꼭 두 가지를 다 확인해 주세요</b>: ① Safari 탭으로 이 페이지를 열었을 때, ② 홈 화면 아이콘으로 앱을 연 다음 "홈"으로 나가지 말고 바로 이 디버그 페이지로 들어왔을 때(표의 "홈 화면 앱 모드" 줄로 지금 어느 쪽인지 확인 가능). 세로로 들었을 때와 가로로 돌렸을 때도 각각 기울여 보세요.</p>
+  <div class="row">
+    <div class="lb">Q. 기울기로 움직이는 공</div>
+    <canvas id="tiltCv" width="300" height="80" style="background:#1b2230;border-radius:8px;display:block"></canvas>
+  </div>
+  <table id="tiltInfo"></table>
+  <p style="font-size:13px;color:#888;margin-top:8px">"deviceorientation 수신"이 계속 0회면 이 모드에서는 그 이벤트가 안 오는 거예요(홈 화면 아이콘 모드에서 막히는 경우가 있다고 알려져 있음) — 그럴 때 "devicemotion 수신"이 그래도 올라가면 그걸로 대신 조작을 만들 수 있는지 판단하는 용도예요.</p>
+  <script>
+  (function () {
+    function $(i) { return document.getElementById(i); }
+    var cv = $('tiltCv'), cx = cv.getContext('2d');
+    var doCount = 0, dmCount = 0, lastDo = null, lastDm = null, lastDoAt = 0, lastDmAt = 0;
+    function drawBall(v) {
+      cx.clearRect(0, 0, 300, 80);
+      cx.fillStyle = '#2a3142'; cx.fillRect(0, 36, 300, 8);
+      var x = 150 + Math.max(-1, Math.min(1, v)) * 120;
+      cx.fillStyle = '#4fd1ff';
+      cx.beginPath(); cx.arc(x, 40, 16, 0, 6.2832); cx.fill();
+    }
+    drawBall(0);
+    // 세로/가로 모드에 따라 좌우 기울기에 해당하는 축이 달라짐(window.orientation으로 분기).
+    function tiltLR(e) {
+      var o = window.orientation;
+      if (o === 180) return -e.gamma;
+      if (o === 90) return e.beta;
+      if (o === -90) return -e.beta;
+      return e.gamma; // 0 또는 orientation 미지원
+    }
+    function render() {
+      var rows = [
+        ['window.orientation', (window.orientation === undefined ? '지원 안 함' : window.orientation)],
+        ['deviceorientation 수신', doCount + '회' + (lastDoAt ? ' (마지막 ' + (Math.round((+new Date() - lastDoAt) / 100) / 10) + '초 전)' : ' (아직 없음)')],
+        ['&nbsp;&nbsp;alpha / beta / gamma', lastDo ? (Math.round(lastDo.alpha) + ' / ' + Math.round(lastDo.beta) + ' / ' + Math.round(lastDo.gamma)) : '-'],
+        ['&nbsp;&nbsp;계산된 좌우값(tiltLR)', lastDo ? Math.round(tiltLR(lastDo)) : '-'],
+        ['devicemotion 수신', dmCount + '회' + (lastDmAt ? ' (마지막 ' + (Math.round((+new Date() - lastDmAt) / 100) / 10) + '초 전)' : ' (아직 없음)')],
+        ['&nbsp;&nbsp;accelerationIncludingGravity x/y/z', (lastDm && lastDm.accelerationIncludingGravity && lastDm.accelerationIncludingGravity.x != null) ? (Math.round(lastDm.accelerationIncludingGravity.x * 10) / 10 + ' / ' + Math.round(lastDm.accelerationIncludingGravity.y * 10) / 10 + ' / ' + Math.round(lastDm.accelerationIncludingGravity.z * 10) / 10) : '-'],
+        ['홈 화면 앱 모드', window.navigator.standalone ? '예' : '아니오 (Safari 탭)']
+      ];
+      var h = ''; for (var i = 0; i < rows.length; i++) h += '<tr><td>' + rows[i][0] + '</td><td>' + rows[i][1] + '</td></tr>';
+      $('tiltInfo').innerHTML = h;
+    }
+    window.addEventListener('deviceorientation', function (e) {
+      doCount++; lastDo = e; lastDoAt = +new Date();
+      if (e.gamma != null) drawBall(tiltLR(e) / 25);
+      render();
+    }, false);
+    window.addEventListener('devicemotion', function (e) {
+      dmCount++; lastDm = e; lastDmAt = +new Date();
+      if (doCount === 0 && e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) drawBall(e.accelerationIncludingGravity.x / 6);
+      render();
+    }, false);
+    render();
+    setInterval(render, 1000);
+  })();
+  </script>
 </div>
 <script src="version.js?v=1"></script>
 <script src="emoji.js?v=16"></script>
