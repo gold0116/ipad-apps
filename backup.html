@@ -80,7 +80,7 @@
   function $(i) { return document.getElementById(i); }
   function say(id, t, cls) { var e = $(id); e.className = cls || ''; e.textContent = t; }
   var MIN_BEST = { bestMemory: 1, bestSlide: 1 };       // 작을수록 좋은 기록
-  var LABELS = { best2048: '2048 최고점', bestSnake: '스네이크 최고점', bestDino: '공룡 달리기 최고점', bestBalloon2: '풍선 모험 최고점', bestTetris: '테트리스 최고점', bestMole: '두더지 잡기 최고점', bestMemory: '짝맞추기 최소 시도', bestSlide: '15퍼즐 최소 이동', 'memo-list-v1': '메모', 'mymusic-list-v1': '내 음악 곡' };
+  var LABELS = { best2048: '2048 최고점', bestSnake: '스네이크 최고점', bestDino: '공룡 달리기 최고점', bestBalloon2: '풍선 모험 최고점', bestTetris: '테트리스 최고점', bestMole: '두더지 잡기 최고점', bestMemory: '짝맞추기 최소 시도', bestSlide: '15퍼즐 최소 이동', bestBounce: '통통점프 최고 높이', 'memo-list-v1': '메모', 'mymusic-list-v1': '내 음악 곡' };
 
   function readAll() {
     var o = {};

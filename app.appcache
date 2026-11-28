@@ -1,5 +1,5 @@
 CACHE MANIFEST
-# v128 2026-11-28
+# v129 2026-11-28
 
 version.js?v=1
 emoji.js?v=16
@@ -54,6 +54,7 @@ midi-export.html
 report.html
 dino.html
 balloon.html
+bouncejump.html
 index.html
 debug.html
 memo.html

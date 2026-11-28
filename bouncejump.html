@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ko" manifest="app.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>통통점프</title>
+<link rel="stylesheet" href="style.css?v=16">
+<style>
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  canvas { display: block; margin: 0 auto; background: #bfe6ff; border-radius: 8px; }
+  #msg { text-align: center; font-size: 16px; font-weight: bold; color: #e5484d; min-height: 44px; margin-top: 6px; padding: 0 8px; }
+  .pad { text-align: center; margin-top: 4px; }
+  .dpad { text-align: center; margin-top: 10px; }
+  .dbtn { display: inline-block; width: 44%; max-width: 160px; padding: 16px 0; margin: 0 6px; font-size: 24px; font-weight: bold; color: #fff; background: #2f6fed; border: none; border-radius: 12px; -webkit-user-select: none; user-select: none; }
+  .dbtn:active { background: #1d4fb8; }
+</style>
+</head>
+<body>
+<div class="top"><a href="index.html">‹ 홈</a> 통통점프</div>
+<div class="wrap">
+  <canvas id="cv" width="300" height="480"></canvas>
+  <div id="msg">기기를 기울여서 좌우로 움직여요<br>발판을 밟으면 자동으로 튀어 올라요</div>
+  <div class="pad"><button class="btn" id="go">시작하기</button></div>
+  <div class="dpad"><button class="dbtn" id="btnL">◀</button><button class="dbtn" id="btnR">▶</button></div>
+  <p style="text-align:center;color:#888;font-size:13px;margin-top:8px">기울기가 잘 안 되면 위 버튼을 누르고 있어도 움직여요</p>
+</div>
+<script src="sound.js?v=50"></script>
+<script src="touchfx.js?v=3"></script>
+<script>
+(function () {
+  function $(i) { return document.getElementById(i); }
+  function now() { return Date.now ? Date.now() : new Date().getTime(); }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+  var cv = $('cv'), ctx = cv.getContext('2d');
+  var tfx = TouchFX.attach(cv);
+  var W = 300, H = 480;
+
+  function layout() {
+    var w = Math.min(window.innerWidth - 24, (window.innerHeight - 210) * (W / H), 420);
+    if (w < 220) w = 220;
+    cv.style.width = w + 'px'; cv.style.height = (w * H / W) + 'px';
+  }
+  window.addEventListener('resize', layout, false);
+  window.addEventListener('orientationchange', layout, false);
+  layout();
+
+  // ---- 시각 효과: vfx.js(별도 rAF 루프) 대신 이 게임 자신의 루프 안에서 직접 그림
+  // (CLAUDE.md 치명적 규칙 4번 — 자체 rAF 루프가 있는 게임에 vfx.js를 같이 쓰면
+  // 화면이 멈추는 버그가 실기에서 재현된 바 있어서 이 저장소 모든 아케이드류
+  // 게임이 breakout.html/snake.html처럼 자체 draw() 안에서 효과를 그림).
+  var particles = [], shakeT = 0, flashT = 0;
+  function burst(cx, cy, colors, count) {
+    for (var i = 0; i < (count || 10); i++) {
+      var a = Math.random() * Math.PI * 2, sp = 0.8 + Math.random() * 1.8;
+      particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, r: 1.5 + Math.random() * 1.8, c: colors[i % colors.length] });
+    }
+  }
+  function stepFx() {
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.94; p.vy *= 0.94; p.life -= 0.035;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    if (shakeT > 0) shakeT = Math.max(0, shakeT - 0.08);
+    if (flashT > 0) flashT = Math.max(0, flashT - 0.06);
+  }
+
+  // ---- 기울기 센서: debug.html의 "기울기 센서 시험"에서 iPad2 실기로 확인한
+  // 축 매핑(세로=gamma, 가로=beta)과 민감도(세로 45도, 가로 15도일 때 딱 맞음
+  // — 사용자 실기 테스트 결과)를 그대로 가져온 값.
+  var SENS_PORTRAIT_DEG = 45, SENS_LANDSCAPE_DEG = 15;
+  var doReceived = false, tiltTarget = 0, motionTarget = 0;
+  function isLandscape() { var o = window.orientation; return o === 90 || o === -90; }
+  function curSensDeg() { return isLandscape() ? SENS_LANDSCAPE_DEG : SENS_PORTRAIT_DEG; }
+  function tiltLR(e) {
+    var o = window.orientation;
+    if (o === 180) return -e.gamma;
+    if (o === 90) return e.beta;
+    if (o === -90) return -e.beta;
+    return e.gamma; // 0 또는 orientation 미지원(세로로 취급)
+  }
+  window.addEventListener('deviceorientation', function (e) {
+    doReceived = true;
+    if (e.gamma != null) tiltTarget = clamp(tiltLR(e) / curSensDeg(), -1, 1);
+  }, false);
+  // deviceorientation이 한 번도 안 오는 기기/모드를 위한 대비책(debug.html 참고).
+  // 실기에선 Safari 탭·홈 화면 아이콘 둘 다 deviceorientation이 잘 와서 이 경로를
+  // 안 타지만, 혹시 모를 기기를 위해 남겨둠 — 축 보정은 안 돼 있어 세로 기준임.
+  window.addEventListener('devicemotion', function (e) {
+    if (!doReceived && e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) {
+      motionTarget = clamp(e.accelerationIncludingGravity.x / 6, -1, 1);
+    }
+  }, false);
+
+  // ---- 버튼(보조 조작) ----
+  var leftHeld = false, rightHeld = false;
+  function bindHold(el, onDown, onUp) {
+    el.addEventListener('touchstart', function (e) { e.preventDefault(); onDown(); }, false);
+    el.addEventListener('touchend', function (e) { e.preventDefault(); onUp(); }, false);
+    el.addEventListener('touchcancel', function (e) { e.preventDefault(); onUp(); }, false);
+    el.addEventListener('mousedown', function () { onDown(); }, false);
+    el.addEventListener('mouseup', function () { onUp(); }, false);
+    el.addEventListener('mouseleave', function () { onUp(); }, false);
+  }
+  bindHold($('btnL'), function () { leftHeld = true; }, function () { leftHeld = false; });
+  bindHold($('btnR'), function () { rightHeld = true; }, function () { rightHeld = false; });
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === 37) leftHeld = true; else if (e.keyCode === 39) rightHeld = true; else return;
+    e.preventDefault();
+  }, false);
+  document.addEventListener('keyup', function (e) {
+    if (e.keyCode === 37) leftHeld = false; else if (e.keyCode === 39) rightHeld = false;
+  }, false);
+  document.addEventListener('touchmove', function (e) { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); }, false);
+
+  // ---- 물리값 ----
+  var GRAVITY = 0.0011, JUMP_VY = -0.62, SPRING_MULT = 1.55, MAX_VX = 0.3;
+  var MAXJUMP = (JUMP_VY * JUMP_VY) / (2 * GRAVITY);
+  var SAFE_GAP_MIN = 70, SAFE_GAP_MAX = MAXJUMP * 0.82;
+
+  var best = 0;
+  try { best = parseInt(localStorage.getItem('bestBounce') || '0', 10) || 0; } catch (e) {}
+
+  var player, camY, platforms, generatedTopY, startY, minY, climbed, score, state = 'idle';
+
+  function pickType() {
+    var t = Math.min(1, climbed / 2500);
+    var wFixed = 70 - 30 * t, wMoving = 10 + 15 * t, wBreak = 10 + 10 * t, wSpring = 10 + 5 * t;
+    var total = wFixed + wMoving + wBreak + wSpring, r = Math.random() * total;
+    if ((r -= wFixed) < 0) return 'fixed';
+    if ((r -= wMoving) < 0) return 'moving';
+    if ((r -= wBreak) < 0) return 'breaking';
+    return 'spring';
+  }
+  function ensureGenerated() {
+    while (generatedTopY > camY - H) {
+      var gap = SAFE_GAP_MIN + Math.random() * (SAFE_GAP_MAX - SAFE_GAP_MIN);
+      var y = generatedTopY - gap;
+      var type = pickType();
+      var w = type === 'spring' ? 46 : 54;
+      var x = w / 2 + 10 + Math.random() * (W - w - 20);
+      var plat = { x: x, y: y, w: w, h: 12, type: type, broken: false, breakT: 1 };
+      if (type === 'moving') { plat.dir = Math.random() < 0.5 ? -1 : 1; plat.speed = 0.03 + Math.random() * 0.025; plat.xMin = w / 2 + 8; plat.xMax = W - w / 2 - 8; }
+      platforms.push(plat);
+      generatedTopY = y;
+    }
+  }
+  function resetWorld() {
+    player = { x: W / 2, y: H - 70, vx: 0, vy: 0, r: 14 };
+    startY = player.y; minY = player.y; climbed = 0; score = 0;
+    camY = 0; platforms = []; particles = []; shakeT = 0; flashT = 0;
+    generatedTopY = player.y + 40;
+    platforms.push({ x: W / 2, y: generatedTopY, w: 120, h: 12, type: 'fixed', broken: false, breakT: 1 });
+    ensureGenerated();
+  }
+  function saveBest() {
+    if (score > best) { best = score; try { localStorage.setItem('bestBounce', best); } catch (e) {} }
+  }
+  function over() {
+    state = 'over'; saveBest();
+    SFX.musicStop(true); SFX.play('over');
+    shakeT = 1; flashT = 1;
+    $('msg').innerHTML = '게임 오버! 높이 ' + score + '<br>(최고 ' + best + ')';
+    $('go').textContent = '다시 시작';
+  }
+  function startGame() {
+    resetWorld(); state = 'run';
+    $('msg').textContent = '기울여서 좌우로! 발판을 밟으면 자동으로 튀어요';
+    $('go').textContent = '다시 시작';
+    SFX.play('start'); SFX.musicStartIfNotOff(true);
+  }
+  $('go').onclick = startGame;
+  cv.addEventListener('touchend', function (e) { if (state !== 'run') { e.preventDefault(); startGame(); } }, false);
+  cv.addEventListener('click', function () { if (state !== 'run') startGame(); }, false);
+
+  function step(dt) {
+    if (state !== 'run') return;
+    var target = (leftHeld && !rightHeld) ? -MAX_VX : (rightHeld && !leftHeld) ? MAX_VX : ((doReceived ? tiltTarget : motionTarget) * MAX_VX);
+    var lerp = Math.min(1, 0.012 * dt);
+    player.vx += (target - player.vx) * lerp;
+    var prevY = player.y;
+    player.vy += GRAVITY * dt;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+    if (player.x < -player.r) player.x = W + player.r;
+    if (player.x > W + player.r) player.x = -player.r;
+
+    if (player.vy > 0) {
+      for (var i = 0; i < platforms.length; i++) {
+        var p = platforms[i];
+        if (p.broken) continue;
+        if (prevY + player.r <= p.y && player.y + player.r >= p.y &&
+            player.x + player.r > p.x - p.w / 2 && player.x - player.r < p.x + p.w / 2) {
+          player.y = p.y - player.r;
+          var mult = p.type === 'spring' ? SPRING_MULT : 1;
+          player.vy = JUMP_VY * mult;
+          burst(player.x, p.y - camY, ['#fff', '#ffe066'], 8);
+          if (p.type === 'spring') SFX.play('point'); else SFX.play('jump');
+          if (p.type === 'breaking') { p.broken = true; p.breakT = 1; SFX.play('drop'); }
+          break;
+        }
+      }
+    }
+
+    for (var j = 0; j < platforms.length; j++) {
+      var mp = platforms[j];
+      if (mp.type === 'moving') {
+        mp.x += mp.dir * mp.speed * dt;
+        if (mp.x < mp.xMin) { mp.x = mp.xMin; mp.dir = 1; }
+        if (mp.x > mp.xMax) { mp.x = mp.xMax; mp.dir = -1; }
+      }
+      if (mp.broken) mp.breakT -= dt / 300;
+    }
+
+    var scrY = player.y - camY, thresh = H * 0.42;
+    if (scrY < thresh) camY -= (thresh - scrY);
+    if (player.y < minY) minY = player.y;
+    climbed = Math.max(0, startY - minY);
+    score = Math.floor(climbed / 8);
+
+    ensureGenerated();
+    for (var k = platforms.length - 1; k >= 0; k--) {
+      var pp = platforms[k];
+      if (pp.y > camY + H + 60 || (pp.broken && pp.breakT <= 0)) platforms.splice(k, 1);
+    }
+
+    if (player.y - player.r > camY + H) over();
+  }
+
+  function roundRect(x, y, w, h, rad) {
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  }
+  function drawPlatform(p) {
+    var sy = p.y - camY;
+    if (sy < -24 || sy > H + 24) return;
+    var alpha = p.broken ? Math.max(0, p.breakT) : 1;
+    ctx.globalAlpha = alpha;
+    var color = p.type === 'fixed' ? '#b5835a' : p.type === 'moving' ? '#4aa3ff' : p.type === 'spring' ? '#ffd166' : '#8d99a8';
+    roundRect(p.x - p.w / 2, sy, p.w, p.h, 4); ctx.fillStyle = color; ctx.fill();
+    if (p.type === 'spring') {
+      ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x - 8, sy); ctx.lineTo(p.x - 8, sy - 8); ctx.lineTo(p.x + 8, sy - 14); ctx.lineTo(p.x - 8, sy - 20); ctx.lineTo(p.x + 8, sy - 24);
+      ctx.stroke();
+    }
+    if (p.type === 'breaking') {
+      ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x - p.w / 2 + 6, sy + 2); ctx.lineTo(p.x, sy + p.h - 2); ctx.lineTo(p.x + p.w / 2 - 6, sy + 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function drawPlayer() {
+    var sx = player.x, sy = player.y - camY, r = player.r;
+    var stretch = Math.min(0.3, Math.abs(player.vy) * 0.3);
+    var sxScale, syScale;
+    if (player.vy < 0) { syScale = 1 - stretch * 0.6; sxScale = 1 + stretch * 0.4; }
+    else { syScale = 1 + stretch * 0.5; sxScale = 1 - stretch * 0.3; }
+    ctx.save(); ctx.translate(sx, sy); ctx.scale(sxScale, syScale);
+    var dir = player.vx < -0.02 ? -1 : (player.vx > 0.02 ? 1 : 0);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#d7a9c9'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 0.7); ctx.lineTo(-r * 0.9, -r * 1.7); ctx.lineTo(-r * 0.1, -r * 0.9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.5, -r * 0.7); ctx.lineTo(r * 0.9, -r * 1.7); ctx.lineTo(r * 0.1, -r * 0.9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.arc(-r * 0.3 + dir * 2, -r * 0.1, r * 0.14, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.3 + dir * 2, -r * 0.1, r * 0.14, 0, 6.2832); ctx.fill();
+    ctx.restore();
+  }
+  function drawParticles() {
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function drawHud() {
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, 0, W, 32);
+    ctx.fillStyle = '#333'; ctx.font = 'bold 15px Helvetica,Arial,sans-serif'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left'; ctx.fillText('높이 ' + score, 10, 16);
+    ctx.textAlign = 'right'; ctx.fillText('최고 ' + best, W - 10, 16);
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (shakeT > 0) ctx.translate((Math.random() * 2 - 1) * 6 * shakeT, (Math.random() * 2 - 1) * 6 * shakeT);
+    for (var i = 0; i < platforms.length; i++) drawPlatform(platforms[i]);
+    drawPlayer();
+    drawParticles();
+    ctx.restore();
+    drawHud();
+    if (flashT > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (flashT * 0.6) + ')'; ctx.fillRect(0, 0, W, H); }
+    tfx.draw(ctx);
+  }
+
+  var last = 0;
+  function loop() {
+    var t = now(), dt = t - last; last = t;
+    if (dt > 40) dt = 40; if (dt < 0) dt = 0;
+    step(dt); stepFx(); draw();
+    frame();
+  }
+  function frame() {
+    var r = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
+    if (r) r.call(window, loop); else setTimeout(loop, 16);
+  }
+
+  resetWorld(); last = now(); frame();
+})();
+</script>
+</body>
+</html>
