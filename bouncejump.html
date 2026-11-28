@@ -155,9 +155,12 @@
       if (type === 'moving') { plat.dir = Math.random() < 0.5 ? -1 : 1; plat.speed = 0.03 + Math.random() * 0.025; plat.xMin = w / 2 + 8; plat.xMax = W - w / 2 - 8; }
       if (type === 'cloud') plat.cloudLife = 1;
       if (type === 'spike') {
-        var spikeFrac = 0.45 + Math.random() * 0.15;
-        if (Math.random() < 0.5) { plat.spikeX0 = x - w / 2; plat.spikeX1 = plat.spikeX0 + w * spikeFrac; }
-        else { plat.spikeX1 = x + w / 2; plat.spikeX0 = plat.spikeX1 - w * spikeFrac; }
+        // 가시는 1~3개만, 폭도 발판의 40%를 넘지 않게 — 작은 발판에서 가시가
+        // 발판 대부분을 차지해 설 자리가 거의 없어지는 문제가 있었음.
+        plat.spikeCount = 1 + Math.floor(Math.random() * 3);
+        var zoneW = Math.min(plat.spikeCount * 9, w * 0.4);
+        if (Math.random() < 0.5) { plat.spikeX0 = x - w / 2; plat.spikeX1 = plat.spikeX0 + zoneW; }
+        else { plat.spikeX1 = x + w / 2; plat.spikeX0 = plat.spikeX1 - zoneW; }
       }
       platforms.push(plat);
       generatedTopY = y;
@@ -315,7 +318,7 @@
       ctx.beginPath(); ctx.arc(p.x - p.w * 0.22, sy + 1, 7, 0, 6.2832); ctx.arc(p.x, sy - 2, 8, 0, 6.2832); ctx.arc(p.x + p.w * 0.22, sy + 1, 7, 0, 6.2832); ctx.fill();
     }
     if (p.type === 'spike') {
-      var sxw = p.spikeX1 - p.spikeX0, n = Math.max(2, Math.round(sxw / 9)), seg = sxw / n;
+      var sxw = p.spikeX1 - p.spikeX0, n = p.spikeCount || 1, seg = sxw / n;
       ctx.fillStyle = '#7a1f1f';
       for (var si = 0; si < n; si++) {
         var tx0 = p.spikeX0 + si * seg;

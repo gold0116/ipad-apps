@@ -197,6 +197,13 @@
     if (i >= 0) bricks.splice(i, 1);
     if (grid[b.r]) grid[b.r][b.c] = null;
   }
+  // stepBall의 반사 방향 보정용: b 기준 (dr,dc) 칸에 벽돌이 있으면 true.
+  // 보스(r=-1,c=-1)처럼 격자 밖의 벽돌은 항상 false(이웃 없음으로 취급).
+  function neighborBrick(b, dr, dc) {
+    if (b.r < 0 || b.c < 0) return false;
+    var rr = b.r + dr, cc = b.c + dc;
+    return !!(grid[rr] && grid[rr][cc]);
+  }
   function destroyBrick(b, viaExplosion) {
     removeBrick(b);
     burst(b.x + (b.w || BW) / 2, b.y + (b.h || BH) / 2, [b.color, '#fff'], viaExplosion ? 8 : 14);
@@ -329,13 +336,25 @@
       if (nx + ball.r > b.x && nx - ball.r < b.x + bw && ny + ball.r > b.y && ny - ball.r < b.y + bh) {
         var indestructible = b.type === 'steel' || b.type === 'gold', through = effects.through > 0 && !indestructible;
         if (!through) {
-          var ox = Math.min(nx + ball.r - b.x, b.x + bw - (nx - ball.r));
-          var oy = Math.min(ny + ball.r - b.y, b.y + bh - (ny - ball.r));
+          var overlapL = nx + ball.r - b.x, overlapR = b.x + bw - (nx - ball.r);
+          var overlapT = ny + ball.r - b.y, overlapB = b.y + bh - (ny - ball.r);
+          var ox = Math.min(overlapL, overlapR), oy = Math.min(overlapT, overlapB);
           // 거의 정확히 모서리에 맞으면(ox,oy가 비슷하면) 한 축만 뒤집지 않고 둘 다
           // 뒤집는다. 한 축만 뒤집으면 모서리(특히 강철/황금 벽돌 사이 좁은 틈)에서
           // 공이 좌우/상하로 왔다갔다만 하며 제자리에 박히는 경우가 있었음.
           if (Math.abs(ox - oy) < 1.5) { ball.vx = -ball.vx; ball.vy = -ball.vy; }
-          else if (ox < oy) ball.vx = -ball.vx; else ball.vy = -ball.vy;
+          else if (ox < oy) {
+            // 수평으로 쭉 이어진 벽돌 줄 한가운데(두 벽돌이 맞닿은 이음매)를
+            // 맞으면, 그 벽돌 하나만 놓고 보면 옆면에 더 얕게 박힌 것처럼
+            // 계산돼(ox<oy) 마치 모서리를 맞은 듯 좌우로 튕겨 돌아가는 버그가
+            // 있었음 — 실은 옆에도 벽돌이 이어져 있어 뚫린 옆면이 아니므로,
+            // 그 방향에 벽돌이 있으면 옆면 반사(vx) 대신 위/아래 반사(vy)로 봄.
+            var ndc = overlapL < overlapR ? -1 : 1;
+            if (neighborBrick(b, 0, ndc)) ball.vy = -ball.vy; else ball.vx = -ball.vx;
+          } else {
+            var ndr = overlapT < overlapB ? -1 : 1;
+            if (neighborBrick(b, ndr, 0)) ball.vx = -ball.vx; else ball.vy = -ball.vy;
+          }
         }
         if (!indestructible) {
           b.hp--;
