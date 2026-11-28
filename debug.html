@@ -222,6 +222,7 @@
     <div class="lb">설정</div>
     <div style="font-size:14px;line-height:2">
       자동 저장: <select id="stCfgSave"><option value="1">켬(평소처럼)</option><option value="0">끔(저장 비용만 떼어서 테스트)</option></select><br>
+      그리기 방식: <select id="stCfgMode"><option value="copy">평소처럼(도화지→화면 복사)</option><option value="direct">실험: 복사 없이 화면에 직접(확대/축소·회전 무시)</option></select><br>
       획 하나당 점 개수: <input type="number" id="stCfgPts" value="150" style="width:70px"> 개
       · 점 사이 간격(실제 손가락 touchmove 흉내): <input type="number" id="stCfgPointGap" value="16" style="width:70px"> ms<br>
       획 사이 간격(손 뗐다가 다시 짚는 시간 흉내): <input type="number" id="stCfgGap" value="200" style="width:70px"> ms
@@ -229,6 +230,7 @@
     </div>
     <div style="margin-top:8px">
       <button class="btn" id="stStart">새 테스트 시작</button>
+      <button class="btn gray" id="stDraw">(자동 아닌) 직접 그려보기 — 같은 그리기 방식으로</button>
       <button class="btn gray" id="stRefresh">결과 새로고침</button>
       <button class="btn red" id="stClear">로그·테스트그림 지우기</button>
     </div>
@@ -239,8 +241,12 @@
   </div>
   <p style="font-size:13px;color:#888">"저장 끔"으로 켰을 때와 "켬"일 때 버티는 획수가 크게 다르면, 자동저장
   쪽이 원인이라는 뜻이고, 비슷하게 죽으면 캔버스 쪽(화면에 그리는 자체)이
-  원인이라는 뜻이에요 — 두 번 돌려서 비교해 보면 다음에 뭘 고쳐야 할지
-  알 수 있어요.</p>
+  원인이라는 뜻이에요. "그리기 방식"을 "복사 없이 직접"으로 바꿔서도
+  비교해 보세요 — 이걸로 버티는 정도가 크게 달라지면 "도화지→화면 복사"
+  자체가 한계의 원인이라는 뜻이고(그러면 확대/축소는 다른 방식 — 예:
+  웹페이지 자체의 확대/축소 — 을 따로 찾아야 함), 비슷하면 다른 원인을
+  찾아야 해요. "직접 그려보기" 버튼은 자동 테스트 없이 평소처럼 손으로
+  그려볼 수 있는 새 그림을 같은 그리기 방식으로 열어줘요.</p>
   <script>
   (function () {
     function $(i) { return document.getElementById(i); }
@@ -257,6 +263,7 @@
         ['누적 점 개수', lg.totalPoints + '개'],
         ['크래시(새로고침) 횟수', lg.crashes + '회'],
         ['자동 저장', lg.saveMode === 'off' ? '끔' : '켬'],
+        ['그리기 방식', lg.drawMode === 'direct' ? '직접(복사 없음)' : '평소처럼(복사)'],
         ['도화지 크기', lg.w + ' × ' + lg.h],
         ['획당 점 개수 / 점 간격 / 획 간격', lg.ptsPerStroke + '개 / ' + (lg.pointGapMs != null ? lg.pointGapMs : '?') + 'ms / ' + lg.gapMs + 'ms'],
         ['시작 시각', fmtT(lg.startedAt)],
@@ -272,9 +279,14 @@
       var gap = Math.max(0, Math.min(5000, +$('stCfgGap').value || 200));
       var max = Math.max(0, +$('stCfgMax').value || 0);
       var save = $('stCfgSave').value;
+      var direct = $('stCfgMode').value === 'direct' ? '1' : '0';
       try { localStorage.removeItem('_drawStressLog'); } catch (e) {}
       location.href = 'drawpad.html?stress=1&new=1&w=1024&h=768&paper=%23ffffff' +
-        '&stressSave=' + save + '&stressGap=' + gap + '&stressPointGap=' + pointGap + '&stressPts=' + pts + (max ? '&stressMax=' + max : '');
+        '&stressSave=' + save + '&stressGap=' + gap + '&stressPointGap=' + pointGap + '&stressPts=' + pts + '&directDraw=' + direct + (max ? '&stressMax=' + max : '');
+    });
+    $('stDraw').addEventListener('click', function () {
+      var direct = $('stCfgMode').value === 'direct' ? '1' : '0';
+      location.href = 'drawpad.html?new=1&w=1024&h=768&paper=%23ffffff&directDraw=' + direct;
     });
     $('stRefresh').addEventListener('click', render);
     $('stClear').addEventListener('click', function () {

@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.15';
-window.APP_VERSION_NOTE = '그림판: 회전 중이 아닐 때는 화면 다시 그릴 때 clip()을 안 쓰도록 줄임 — 속도보다 "클립 호출 횟수" 자체가 원인일 가능성 실험';
-window.APP_VERSION_DATE = '2026-11-27';
+window.APP_VERSION = '0.5.16';
+window.APP_VERSION_NOTE = '그림판 한계 테스트: 도화지→화면 복사 없이 직접 그리는 실험 모드(?directDraw=1) 추가 — 복사 자체가 한계 원인인지 확인용';
+window.APP_VERSION_DATE = '2026-11-28';
