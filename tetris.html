@@ -32,8 +32,6 @@
       <div class="lb">최고</div><div class="v" id="best">0</div>
       <button class="btn gray" id="pause" style="width:100%;margin:10px 0 0;padding:10px 0;font-size:15px">일시정지</button>
       <button class="btn red" id="new" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">새 게임</button>
-      <button class="btn gray" id="mus" style="width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">배경음 켜짐</button>
-      <button class="btn gray" id="song" style="display:none;width:100%;margin:6px 0 0;padding:10px 0;font-size:15px">음악: A</button>
     </div>
   </div>
   <div class="pad">
@@ -215,41 +213,12 @@
     if (state === 'run') { state = 'pause'; clearInterval(timer); SFX.musicStop(false); $('pause').textContent = '계속'; draw(); }
     else if (state === 'pause') { state = 'run'; schedule(); SFX.musicStartIfNotOff(false); $('pause').textContent = '일시정지'; draw(); }
   });
-  function musLabel() { $('mus').textContent = SFX.isMusicMuted() ? '배경음 꺼짐' : '배경음 켜짐'; }
-  press('mus', function () { SFX.setMusicMuted(!SFX.isMusicMuted()); musLabel(); });
-  musLabel();
-
-  // 선택 곡: 파일(bradinsky.json)이 있을 때만 "음악 B" 버튼이 나타난다 (없으면 A만)
-  // + "내 음악"에 저장한 곡들(mymusic-list-v1)도 선택 목록에 들어간다
-  var songList = [{ id: 'a', label: '음악: A' }], songIdx = 0;
-  function songLabel() { $('song').textContent = songList[songIdx].label; }
-  function applySong(i) {
-    songIdx = i; SFX.setSong(songList[i].id);
-    try { localStorage.setItem('tetrisSong', songList[i].id); } catch (e) {}
-    songLabel();
-  }
-  function restoreSong() {
-    try {
-      var id = localStorage.getItem('tetrisSong');
-      for (var i = 0; i < songList.length; i++) if (songList[i].id === id) { songIdx = i; SFX.setSong(id); }
-    } catch (e) {}
-    songLabel();
-    if (songList.length > 1) $('song').style.display = 'block';
-  }
-  press('song', function () { applySong((songIdx + 1) % songList.length); });
-  SFX.setLoop(true);
-  try {
-    var my = JSON.parse(localStorage.getItem('mymusic-list-v1') || '[]');
-    for (var mi = 0; mi < my.length; mi++) {
-      var rr = SFX.defineSong('my' + my[mi].id, JSON.parse(my[mi].text));
-      if (rr.ok) songList.push({ id: 'my' + my[mi].id, label: '음악: ' + String(my[mi].name).substr(0, 8) });
-    }
-  } catch (e) {}
-  restoreSong();
-  SFX.loadSong('b', 'bradinsky.json', function (ok) {
-    if (ok) songList.splice(1, 0, { id: 'b', label: '음악: B' });
-    restoreSong();
-  });
+  // 배경음 켜짐/꺼짐·곡 선택(코로베이니키/음악 B/내 음악)은 모두 상단
+  // SFX.attachBgm() 드롭다운에서 함 — 예전엔 이 사이드 패널에도 "배경음
+  // 켜짐/꺼짐" 버튼과 "음악: A" 곡 선택 버튼이 따로 있었는데, 같은 걸 두
+  // 군데서 고르는 중복이었고 심지어 "배경음 꺼짐" 버튼은 이 페이지만이
+  // 아니라 다른 게임까지 전부 묵음 처리하는 전역 플래그(musicMuted)라
+  // 혼란스러웠음(사용자 피드백으로 제거).
   // 캔버스 스와이프: 좌우로 밀면 그만큼 이동, 아래로 천천히 밀면 소프트 드롭,
   // 빠르게 짧은 시간에 아래로 휙 밀면 하드 드롭, 가만히 탭하면 회전.
   // 버튼은 그대로 두고 터치 제스처를 추가로 쓸 수 있게 함.
