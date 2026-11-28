@@ -19,7 +19,7 @@
   <canvas id="cv" width="300" height="480"></canvas>
   <div id="msg">화면을 터치하면 시작해요<br>기울여서 좌우로 움직이고, 발판을 밟으면 자동으로 튀어 올라요</div>
   <div class="pad"><button class="btn" id="go">시작하기</button></div>
-  <p style="text-align:center;color:#888;font-size:13px;margin-top:8px">기울기가 잘 안 되면 화면의 왼쪽/오른쪽을 누르고 있어도 움직여요</p>
+  <p style="text-align:center;color:#888;font-size:13px;margin-top:8px">가시 발판은 가시 없는 쪽을 밟으세요 · 열기구를 먹으면 잠시 발판 없이 쭉 올라가요<br>기울기가 잘 안 되면 화면의 왼쪽/오른쪽을 누르고 있어도 움직여요</p>
 </div>
 <script src="sound.js?v=50"></script>
 <script src="touchfx.js?v=3"></script>
@@ -65,8 +65,10 @@
 
   // ---- 기울기 센서: debug.html의 "기울기 센서 시험"에서 iPad2 실기로 확인한
   // 축 매핑(세로=gamma, 가로=beta)과 민감도(세로 45도, 가로 15도일 때 딱 맞음
-  // — 사용자 실기 테스트 결과)를 그대로 가져온 값.
-  var SENS_PORTRAIT_DEG = 45, SENS_LANDSCAPE_DEG = 15;
+  // — 사용자 실기 테스트 결과)를 바탕으로, "급하게 옆으로 점프하려다 기기가
+  // 가로모드로 돌아가 버린다"는 추가 피드백에 따라 1.1배 더 민감하게(각도를
+  // 1.1로 나눔 — 그만큼 적게 기울여도 끝까지 가게) 조정.
+  var SENS_PORTRAIT_DEG = 45 / 1.1, SENS_LANDSCAPE_DEG = 15 / 1.1;
   var doReceived = false, tiltTarget = 0, motionTarget = 0;
   function isLandscape() { var o = window.orientation; return o === 90 || o === -90; }
   function curSensDeg() { return isLandscape() ? SENS_LANDSCAPE_DEG : SENS_PORTRAIT_DEG; }
@@ -119,38 +121,53 @@
   var GRAVITY = 0.0011, JUMP_VY = -0.62, SPRING_MULT = 1.55, MAX_VX = 0.3;
   var MAXJUMP = (JUMP_VY * JUMP_VY) / (2 * GRAVITY);
   var SAFE_GAP_MIN = 70, SAFE_GAP_MAX = MAXJUMP * 0.82;
+  var SLIP_MS = 700;                    // 얼음 발판을 밟은 뒤 조작이 둔해지는 시간
+  var CLOUD_LIFE_MS = 2600;             // 구름 발판이 밟든 안 밟든 사라지기까지 걸리는 시간
+  var ITEM_CHANCE = 0.09;               // 발판을 만들 때마다 열기구 아이템이 뜰 확률
+  var FLY_VY = -0.4, FLY_MS = 3400;     // 열기구: 상승 속도, 지속 시간
 
   var best = 0;
   try { best = parseInt(localStorage.getItem('bestBounce') || '0', 10) || 0; } catch (e) {}
 
-  var player, camY, platforms, generatedTopY, startY, minY, climbed, score, state = 'idle';
+  var player, camY, platforms, items, generatedTopY, startY, minY, climbed, score, state = 'idle';
+  var slipT = 0, flyT = 0;
 
   function pickType() {
     var t = Math.min(1, climbed / 2500);
-    var wFixed = 70 - 30 * t, wMoving = 10 + 15 * t, wBreak = 10 + 10 * t, wSpring = 10 + 5 * t;
-    var total = wFixed + wMoving + wBreak + wSpring, r = Math.random() * total;
-    if ((r -= wFixed) < 0) return 'fixed';
-    if ((r -= wMoving) < 0) return 'moving';
-    if ((r -= wBreak) < 0) return 'breaking';
-    return 'spring';
+    var w = {
+      fixed: 55 - 25 * t, moving: 10 + 8 * t, breaking: 8 + 8 * t, spring: 8 + 4 * t,
+      ice: 7 + 6 * t, cloud: 6 + 6 * t, spike: 6 + 10 * t
+    };
+    var total = 0, k;
+    for (k in w) total += w[k];
+    var r = Math.random() * total;
+    for (k in w) { if ((r -= w[k]) < 0) return k; }
+    return 'fixed';
   }
   function ensureGenerated() {
     while (generatedTopY > camY - H) {
       var gap = SAFE_GAP_MIN + Math.random() * (SAFE_GAP_MAX - SAFE_GAP_MIN);
       var y = generatedTopY - gap;
       var type = pickType();
-      var w = type === 'spring' ? 46 : 54;
+      var w = type === 'spring' ? 46 : (type === 'spike' ? 60 : 54);
       var x = w / 2 + 10 + Math.random() * (W - w - 20);
       var plat = { x: x, y: y, w: w, h: 12, type: type, broken: false, breakT: 1 };
       if (type === 'moving') { plat.dir = Math.random() < 0.5 ? -1 : 1; plat.speed = 0.03 + Math.random() * 0.025; plat.xMin = w / 2 + 8; plat.xMax = W - w / 2 - 8; }
+      if (type === 'cloud') plat.cloudLife = 1;
+      if (type === 'spike') {
+        var spikeFrac = 0.45 + Math.random() * 0.15;
+        if (Math.random() < 0.5) { plat.spikeX0 = x - w / 2; plat.spikeX1 = plat.spikeX0 + w * spikeFrac; }
+        else { plat.spikeX1 = x + w / 2; plat.spikeX0 = plat.spikeX1 - w * spikeFrac; }
+      }
       platforms.push(plat);
       generatedTopY = y;
+      if (Math.random() < ITEM_CHANCE) items.push({ x: x, y: y - 36, r: 12, type: 'balloon' });
     }
   }
   function resetWorld() {
     player = { x: W / 2, y: H - 70, vx: 0, vy: 0, r: 14 };
     startY = player.y; minY = player.y; climbed = 0; score = 0;
-    camY = 0; platforms = []; particles = []; shakeT = 0; flashT = 0;
+    camY = 0; platforms = []; items = []; particles = []; shakeT = 0; flashT = 0; slipT = 0; flyT = 0;
     generatedTopY = player.y + 40;
     platforms.push({ x: W / 2, y: generatedTopY, w: 120, h: 12, type: 'fixed', broken: false, breakT: 1 });
     ensureGenerated();
@@ -185,27 +202,47 @@
   function step(dt) {
     if (state !== 'run') return;
     var target = (leftHeld && !rightHeld) ? -MAX_VX : (rightHeld && !leftHeld) ? MAX_VX : ((doReceived ? tiltTarget : motionTarget) * MAX_VX);
-    var lerp = Math.min(1, 0.012 * dt);
+    var lerp = Math.min(1, 0.012 * dt) * (slipT > 0 ? 0.3 : 1); // 얼음 발판 직후엔 조작이 둔해짐
+    if (slipT > 0) slipT -= dt;
     player.vx += (target - player.vx) * lerp;
     var prevY = player.y;
     player.vy += GRAVITY * dt;
+    if (flyT > 0) { flyT -= dt; player.vy = FLY_VY; } // 열기구: 중력 무시, 일정 속도로 계속 상승
     player.x += player.vx * dt;
     player.y += player.vy * dt;
     if (player.x < -player.r) player.x = W + player.r;
     if (player.x > W + player.r) player.x = -player.r;
 
-    if (player.vy > 0) {
+    // 아이템(열기구)은 오르는 중/떨어지는 중 상관없이 스치기만 하면 주움
+    for (var ii = items.length - 1; ii >= 0; ii--) {
+      var it = items[ii];
+      var dx = player.x - it.x, dy = player.y - it.y;
+      if (dx * dx + dy * dy < (player.r + it.r) * (player.r + it.r)) {
+        items.splice(ii, 1);
+        if (it.type === 'balloon') { flyT = FLY_MS; SFX.play('item'); burst(it.x, it.y - camY, ['#ff8fa3', '#fff'], 10); }
+      }
+    }
+
+    if (!flyT && player.vy > 0) {
       for (var i = 0; i < platforms.length; i++) {
         var p = platforms[i];
         if (p.broken) continue;
         if (prevY + player.r <= p.y && player.y + player.r >= p.y &&
             player.x + player.r > p.x - p.w / 2 && player.x - player.r < p.x + p.w / 2) {
+          if (p.type === 'spike' && player.x > p.spikeX0 && player.x < p.spikeX1) {
+            SFX.musicStop(true); SFX.play('hit');
+            burst(player.x, p.y - camY, ['#ff4d4d', '#7a1f1f'], 12);
+            shakeT = 1;
+            over();
+            return;
+          }
           player.y = p.y - player.r;
           var mult = p.type === 'spring' ? SPRING_MULT : 1;
           player.vy = JUMP_VY * mult;
           burst(player.x, p.y - camY, ['#fff', '#ffe066'], 8);
           if (p.type === 'spring') SFX.play('point'); else SFX.play('jump');
           if (p.type === 'breaking') { p.broken = true; p.breakT = 1; SFX.play('drop'); }
+          if (p.type === 'ice') slipT = SLIP_MS;
           break;
         }
       }
@@ -217,6 +254,12 @@
         mp.x += mp.dir * mp.speed * dt;
         if (mp.x < mp.xMin) { mp.x = mp.xMin; mp.dir = 1; }
         if (mp.x > mp.xMax) { mp.x = mp.xMax; mp.dir = -1; }
+      }
+      if (mp.type === 'cloud' && !mp.broken) {
+        mp.cloudLife -= dt / CLOUD_LIFE_MS;
+        // breakT를 1로 켜면 이미 cloudLife로 다 희미해진 뒤 갑자기 다시 선명해져 보이는
+        // 깜빡임이 생겨서, 사라지는 중엔 0으로 둬 계속 투명한 채로 이어지게 함.
+        if (mp.cloudLife <= 0) { mp.broken = true; mp.breakT = 0; }
       }
       if (mp.broken) mp.breakT -= dt / 300;
     }
@@ -232,6 +275,7 @@
       var pp = platforms[k];
       if (pp.y > camY + H + 60 || (pp.broken && pp.breakT <= 0)) platforms.splice(k, 1);
     }
+    for (var m = items.length - 1; m >= 0; m--) if (items[m].y > camY + H + 60) items.splice(m, 1);
 
     if (player.y - player.r > camY + H) over();
   }
@@ -245,13 +289,13 @@
     ctx.arcTo(x, y, x + w, y, rad);
     ctx.closePath();
   }
+  var PLAT_COLOR = { fixed: '#b5835a', moving: '#4aa3ff', spring: '#ffd166', ice: '#bfe9ff', cloud: '#ffffff', spike: '#c9b38a', breaking: '#8d99a8' };
   function drawPlatform(p) {
     var sy = p.y - camY;
     if (sy < -24 || sy > H + 24) return;
-    var alpha = p.broken ? Math.max(0, p.breakT) : 1;
+    var alpha = p.broken ? Math.max(0, p.breakT) : (p.type === 'cloud' ? clamp(p.cloudLife, 0, 1) : 1);
     ctx.globalAlpha = alpha;
-    var color = p.type === 'fixed' ? '#b5835a' : p.type === 'moving' ? '#4aa3ff' : p.type === 'spring' ? '#ffd166' : '#8d99a8';
-    roundRect(p.x - p.w / 2, sy, p.w, p.h, 4); ctx.fillStyle = color; ctx.fill();
+    roundRect(p.x - p.w / 2, sy, p.w, p.h, 4); ctx.fillStyle = PLAT_COLOR[p.type] || PLAT_COLOR.fixed; ctx.fill();
     if (p.type === 'spring') {
       ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = 2;
       ctx.beginPath();
@@ -262,10 +306,41 @@
       ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(p.x - p.w / 2 + 6, sy + 2); ctx.lineTo(p.x, sy + p.h - 2); ctx.lineTo(p.x + p.w / 2 - 6, sy + 2); ctx.stroke();
     }
+    if (p.type === 'ice') {
+      ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.x - p.w / 2 + 4, sy + 3); ctx.lineTo(p.x + p.w / 2 - 4, sy + 3); ctx.stroke();
+    }
+    if (p.type === 'cloud') {
+      ctx.fillStyle = PLAT_COLOR.cloud;
+      ctx.beginPath(); ctx.arc(p.x - p.w * 0.22, sy + 1, 7, 0, 6.2832); ctx.arc(p.x, sy - 2, 8, 0, 6.2832); ctx.arc(p.x + p.w * 0.22, sy + 1, 7, 0, 6.2832); ctx.fill();
+    }
+    if (p.type === 'spike') {
+      var sxw = p.spikeX1 - p.spikeX0, n = Math.max(2, Math.round(sxw / 9)), seg = sxw / n;
+      ctx.fillStyle = '#7a1f1f';
+      for (var si = 0; si < n; si++) {
+        var tx0 = p.spikeX0 + si * seg;
+        ctx.beginPath(); ctx.moveTo(tx0, sy); ctx.lineTo(tx0 + seg / 2, sy - 9); ctx.lineTo(tx0 + seg, sy); ctx.closePath(); ctx.fill();
+      }
+    }
     ctx.globalAlpha = 1;
+  }
+  function drawItems() {
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], sy = it.y - camY;
+      if (sy < -20 || sy > H + 20) continue;
+      if (it.type === 'balloon') drawBalloon(it.x, sy, it.r);
+    }
+  }
+  function drawBalloon(cx, cy, r) {
+    ctx.fillStyle = '#ff6b9d'; ctx.strokeStyle = '#c23f6e'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse ? ctx.ellipse(cx, cy - 4, r * 0.8, r, 0, 0, 6.2832) : ctx.arc(cx, cy - 4, r * 0.9, 0, 6.2832);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#8a5a3a'; ctx.beginPath(); ctx.moveTo(cx - 4, cy + r - 2); ctx.lineTo(cx - 5, cy + r + 6); ctx.moveTo(cx + 4, cy + r - 2); ctx.lineTo(cx + 5, cy + r + 6); ctx.stroke();
+    ctx.fillStyle = '#8a5a3a'; ctx.fillRect(cx - 6, cy + r + 5, 12, 6);
   }
   function drawPlayer() {
     var sx = player.x, sy = player.y - camY, r = player.r;
+    if (flyT > 0) drawBalloon(sx, sy - r * 2.6, r * 1.2);
     var stretch = Math.min(0.3, Math.abs(player.vy) * 0.3);
     var sxScale, syScale;
     if (player.vy < 0) { syScale = 1 - stretch * 0.6; sxScale = 1 + stretch * 0.4; }
@@ -295,12 +370,18 @@
     ctx.fillStyle = '#333'; ctx.font = 'bold 15px Helvetica,Arial,sans-serif'; ctx.textBaseline = 'middle';
     ctx.textAlign = 'left'; ctx.fillText('높이 ' + score, 10, 16);
     ctx.textAlign = 'right'; ctx.fillText('최고 ' + best, W - 10, 16);
+    if (flyT > 0) {
+      var frac = clamp(flyT / FLY_MS, 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.fillRect(0, 32, W, 5);
+      ctx.fillStyle = '#ff6b9d'; ctx.fillRect(0, 32, W * frac, 5);
+    }
   }
   function draw() {
     ctx.clearRect(0, 0, W, H);
     ctx.save();
     if (shakeT > 0) ctx.translate((Math.random() * 2 - 1) * 6 * shakeT, (Math.random() * 2 - 1) * 6 * shakeT);
     for (var i = 0; i < platforms.length; i++) drawPlatform(platforms[i]);
+    drawItems();
     drawPlayer();
     drawParticles();
     ctx.restore();
