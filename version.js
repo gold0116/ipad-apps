@@ -3,6 +3,6 @@
 // - 그 외 자잘한 업데이트(버그 수정, 레벨 추가, 작은 기능): 마지막 숫자를
 //   0.x.1, 0.x.2 처럼 올림
 // 정식 릴리즈 개념이 없는 개인 저장소라 1.0은 없음 — 계속 0.x(.y)로만 올라감.
-window.APP_VERSION = '0.5.19';
-window.APP_VERSION_NOTE = '디버그 페이지에 기울기(deviceorientation/devicemotion) 센서 시험 섹션 추가 — 틸트 게임(BounceScape류) 만들기 전 iPad2 실기 확인용';
+window.APP_VERSION = '0.5.20';
+window.APP_VERSION_NOTE = '기울기 센서 시험에 세로/가로 모드별 민감도 슬라이더 추가 — 실기에서 세로는 과민감, 가로는 둔감하다는 피드백에 따라 각도를 직접 맞춰볼 수 있게 함';
 window.APP_VERSION_DATE = '2026-11-28';

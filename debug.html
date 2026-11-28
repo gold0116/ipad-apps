@@ -318,12 +318,21 @@
     <div class="lb">Q. 기울기로 움직이는 공</div>
     <canvas id="tiltCv" width="300" height="80" style="background:#1b2230;border-radius:8px;display:block"></canvas>
   </div>
+  <div class="row">
+    <div class="lb">R. 민감도 조절 (값이 작을수록 더 민감 = 적게 기울여도 끝까지 감)</div>
+    <div style="font-size:14px;line-height:2.2">
+      세로 모드 기준 각도: <input type="range" id="sensP" min="8" max="90" value="25" style="width:160px;vertical-align:middle"> <span id="sensPVal">25</span>도
+      <br>가로 모드 기준 각도: <input type="range" id="sensL" min="8" max="90" value="25" style="width:160px;vertical-align:middle"> <span id="sensLVal">25</span>도
+    </div>
+    <div style="font-size:13px;color:#888;margin-top:4px">공이 중앙에서 화면 끝까지 가는 데 필요한 기울기 각도예요. 지금 들고 있는 방향(세로/가로)에 맞는 슬라이더를 움직이면서 공으로 느껴보고, 각각 딱 맞는다고 느껴지는 숫자를 알려주세요.</div>
+  </div>
   <table id="tiltInfo"></table>
   <p style="font-size:13px;color:#888;margin-top:8px">"deviceorientation 수신"이 계속 0회면 이 모드에서는 그 이벤트가 안 오는 거예요(홈 화면 아이콘 모드에서 막히는 경우가 있다고 알려져 있음) — 그럴 때 "devicemotion 수신"이 그래도 올라가면 그걸로 대신 조작을 만들 수 있는지 판단하는 용도예요.</p>
   <script>
   (function () {
     function $(i) { return document.getElementById(i); }
     var cv = $('tiltCv'), cx = cv.getContext('2d');
+    var sensP = $('sensP'), sensL = $('sensL'), sensPVal = $('sensPVal'), sensLVal = $('sensLVal');
     var doCount = 0, dmCount = 0, lastDo = null, lastDm = null, lastDoAt = 0, lastDmAt = 0;
     function drawBall(v) {
       cx.clearRect(0, 0, 300, 80);
@@ -333,6 +342,10 @@
       cx.beginPath(); cx.arc(x, 40, 16, 0, 6.2832); cx.fill();
     }
     drawBall(0);
+    function isLandscape() { var o = window.orientation; return o === 90 || o === -90; }
+    function curSensDeg() { return isLandscape() ? (+sensL.value || 25) : (+sensP.value || 25); }
+    sensP.addEventListener('input', function () { sensPVal.textContent = sensP.value; });
+    sensL.addEventListener('input', function () { sensLVal.textContent = sensL.value; });
     // 세로/가로 모드에 따라 좌우 기울기에 해당하는 축이 달라짐(window.orientation으로 분기).
     function tiltLR(e) {
       var o = window.orientation;
@@ -343,7 +356,8 @@
     }
     function render() {
       var rows = [
-        ['window.orientation', (window.orientation === undefined ? '지원 안 함' : window.orientation)],
+        ['window.orientation', (window.orientation === undefined ? '지원 안 함' : window.orientation) + (isLandscape() ? ' (가로)' : ' (세로)')],
+        ['지금 쓰는 민감도 각도', curSensDeg() + '도'],
         ['deviceorientation 수신', doCount + '회' + (lastDoAt ? ' (마지막 ' + (Math.round((+new Date() - lastDoAt) / 100) / 10) + '초 전)' : ' (아직 없음)')],
         ['&nbsp;&nbsp;alpha / beta / gamma', lastDo ? (Math.round(lastDo.alpha) + ' / ' + Math.round(lastDo.beta) + ' / ' + Math.round(lastDo.gamma)) : '-'],
         ['&nbsp;&nbsp;계산된 좌우값(tiltLR)', lastDo ? Math.round(tiltLR(lastDo)) : '-'],
@@ -356,7 +370,7 @@
     }
     window.addEventListener('deviceorientation', function (e) {
       doCount++; lastDo = e; lastDoAt = +new Date();
-      if (e.gamma != null) drawBall(tiltLR(e) / 25);
+      if (e.gamma != null) drawBall(tiltLR(e) / curSensDeg());
       render();
     }, false);
     window.addEventListener('devicemotion', function (e) {
