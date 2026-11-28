@@ -500,15 +500,15 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
 
   /* ---------- 터치 처리 ---------- */
   var mode = 'none', pend = null, st = null, stV = null, curOp = null, gest = null, pan = null, tapf = null, lastS = null;
-  // 실험 모드(?directDraw=1): 평소에는 touchmove마다 docCv(도화지)에 그린
-  // 다음, 그 영역만 vcv(화면)로 복사해서 보여주는데(paintView의
-  // drawImage) — 이 "복사" 자체가 구형 WebKit에서 비용이 크다는 의심이
-  // 있어, 실험적으로 그 복사를 건너뛰고 같은 선을 vcv에도 동시에 직접
-  // 그려서 화면에 보여준다(획이 끝나면 한 번은 docCv에서 제대로 복사해
-  // 맞춤). 확대/축소/회전된 상태에서도 좌표는 맞게 그려지지만, 이
-  // 모드에서는 성능 비교가 목적이라 평소처럼 복사 기반으로도 동작 확인
-  // 가능하게 기본값은 꺼둠.
-  var directDraw = false;
+  // 실기 테스트로 확정: touchmove마다 docCv(도화지)에 그린 걸 그 영역만
+  // vcv(화면)로 캔버스→캔버스 복사하던 방식(paintView의 drawImage)이
+  // 구형 WebKit(iPad2)에서 몇 획 만에 크래시(새로고침)로 이어지는 진짜
+  // 원인이었음 — "?directDraw=1" 실험 모드로 그 복사를 완전히 건너뛰고
+  // 같은 선을 화면에도 동시에 직접 그리게 했더니 자동/수동 테스트 모두
+  // 에러 없이 계속 버텼고, 확대·축소·회전도 그대로 잘 됨(그 기능들은
+  // 이 복사를 touchmove마다 쓰지 않으므로). 그래서 이걸 실험이 아니라
+  // 평소 동작으로 확정함: 그리는 동안은 복사 없이 화면에 직접, 획이
+  // 끝나면 그때 한 번만 docCv에서 제대로 복사해 맞춘다.
   function toDoc(x, y) { return inv(view, x, y); }
   function dist(a, b) { return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
   function beginPending(p) {
@@ -522,14 +522,12 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
     drawStroke(false);
   }
   function drawStroke(fin) {
-    var bb = st.upTo(dctx, curOp.q.length / 2, fin);
-    if (directDraw) {
-      var a = view.a || 0, z = view.z, c = Math.cos(a) * z, s = Math.sin(a) * z;
-      vctx.setTransform(c, s, -s, c, view.ox, view.oy);
-      stV.upTo(vctx, curOp.q.length / 2, fin);
-      vctx.setTransform(1, 0, 0, 1, 0, 0);
-      if (fin) markFull();
-    } else if (bb) markDoc(bb);
+    st.upTo(dctx, curOp.q.length / 2, fin);
+    var a = view.a || 0, z = view.z, c = Math.cos(a) * z, s = Math.sin(a) * z;
+    vctx.setTransform(c, s, -s, c, view.ox, view.oy);
+    stV.upTo(vctx, curOp.q.length / 2, fin);
+    vctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (fin) markFull();
   }
   // 손을 떼지 않고 한 획을 계속 길게 이어 그리면(실기에서 느려지다
   // 리프레시됨을 확인) curOp.q가 끝없이 커짐 — touchmove 1번당 계산량은
@@ -987,7 +985,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
       localStorage.setItem(LOGK, JSON.stringify({
         id: doc.id, running: !!running, startedAt: stressCfg.startedAt, lastCheckpointAt: +new Date(),
         strokeCount: stressCfg.count, totalPoints: stressCfg.points, crashes: stressCfg.crashes,
-        saveMode: stressCfg.noSave ? 'off' : 'on', drawMode: directDraw ? 'direct' : 'copy', w: W, h: H, ptsPerStroke: stressCfg.pts, gapMs: stressCfg.gap, pointGapMs: stressCfg.pointGap,
+        saveMode: stressCfg.noSave ? 'off' : 'on', w: W, h: H, ptsPerStroke: stressCfg.pts, gapMs: stressCfg.gap, pointGapMs: stressCfg.pointGap,
         note: note || ''
       }));
     } catch (e) {}
@@ -1040,7 +1038,7 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
         for (i = 0; i < stressRecent.length; i++) avg += stressRecent[i]; avg = Math.round(avg / stressRecent.length);
         stressCfg.count++; stressCfg.points += stressCfg.pts;
         stressWriteLog(true);
-        stressOverlay('한계 테스트 중 — 누적 ' + stressCfg.count + '획 / ' + stressCfg.points + '점 / 크래시 ' + stressCfg.crashes + '회 / 획당 ' + avg + 'ms (저장:' + (stressCfg.noSave ? '끔' : '켬') + ', 그리기:' + (directDraw ? '직접' : '복사') + ')');
+        stressOverlay('한계 테스트 중 — 누적 ' + stressCfg.count + '획 / ' + stressCfg.points + '점 / 크래시 ' + stressCfg.crashes + '회 / 획당 ' + avg + 'ms (저장:' + (stressCfg.noSave ? '끔' : '켬') + ')');
         stressPath = null;
         if (stressCfg.max && stressCfg.count >= stressCfg.max) { stressStop('설정한 개수(' + stressCfg.max + '획)에 도달'); return; }
         stressTimer = setTimeout(stressStep, stressCfg.gap);
@@ -1090,7 +1088,6 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
   window.addEventListener('load', layout, false);
   (function start() {
     var qs = parseQS();
-    directDraw = qs.directDraw === '1';
     if (qs.id) { openDoc(qs.id, qs.stress === '1' ? function () { startStressTest(qs); } : undefined); return; }
     if (qs['new']) {
       var W_ = Math.max(64, Math.min(3072, parseInt(qs.w, 10) || 1024));
@@ -1107,7 +1104,6 @@ window.onerror = function (m, u, l) { var d = document.getElementById('err'); if
           '&stressGap=' + (qs.stressGap || '250') +
           '&stressPts=' + (qs.stressPts || '40') +
           '&stressPointGap=' + (qs.stressPointGap || '16') +
-          '&directDraw=' + (qs.directDraw === '1' ? '1' : '0') +
           (qs.stressMax ? '&stressMax=' + encodeURIComponent(qs.stressMax) : ''));
         return;
       }
